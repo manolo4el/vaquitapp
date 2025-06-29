@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     shortcut: "/vaquitapp-icon.svg",
     apple: "/vaquitapp-icon.svg",
   },
-    generator: 'v0.dev'
+  generator: 'VaquitApp'
 }
 
 export default function RootLayout({
