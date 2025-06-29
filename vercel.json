@@ -9,5 +9,8 @@
     "app/**/*.tsx": {
       "runtime": "nodejs18.x"
     }
+  },
+  "env": {
+    "NODE_VERSION": "18"
   }
 } 
