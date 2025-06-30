@@ -1,6 +1,4 @@
 "use client"
-
-import React from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -139,8 +137,6 @@ export default function DashboardPage() {
       case "owes":
         return "Debes"
       case "settled":
-        return "Saldado"
-      default:
         return ""
     }
   }
