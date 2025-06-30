@@ -60,15 +60,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@next/swc-darwin-arm64": "14.0.4",
-    "@next/swc-darwin-x64": "14.0.4",
-    "@next/swc-linux-arm64-gnu": "14.0.4",
-    "@next/swc-linux-arm64-musl": "14.0.4",
     "@next/swc-linux-x64-gnu": "14.0.4",
-    "@next/swc-linux-x64-musl": "14.0.4",
-    "@next/swc-win32-arm64-msvc": "14.0.4",
-    "@next/swc-win32-ia32-msvc": "14.0.4",
-    "@next/swc-win32-x64-msvc": "14.0.4",
     "@types/node": "20.10.0",
     "@types/react": "18.2.39",
     "@types/react-dom": "18.2.17",
