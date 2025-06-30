@@ -1,4 +1,4 @@
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
+import { initializeApp, getApps } from "firebase/app"
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth"
 
 const firebaseConfig = {
@@ -10,7 +10,9 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-let app: FirebaseApp
+// Initialize Firebase
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+
 let auth: Auth
 let googleProvider: GoogleAuthProvider
 
@@ -20,13 +22,6 @@ export function getFirebaseAuth(): Auth {
   }
 
   if (!auth) {
-    // Initialize Firebase app if not already initialized
-    if (!getApps().length) {
-      app = initializeApp(firebaseConfig)
-    } else {
-      app = getApps()[0]
-    }
-
     auth = getAuth(app)
   }
 
@@ -46,3 +41,5 @@ export function getGoogleProvider(): GoogleAuthProvider {
 
   return googleProvider
 }
+
+export default app

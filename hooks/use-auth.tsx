@@ -24,7 +24,7 @@ export function useAuth() {
     // Timeout de seguridad para evitar loading infinito
     const timeout = setTimeout(() => {
       setLoading(false)
-    }, 3000)
+    }, 2000)
 
     return () => {
       unsubscribe()

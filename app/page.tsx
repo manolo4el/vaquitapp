@@ -60,9 +60,18 @@ export default function HomePage() {
       {/* Elementos decorativos de fondo */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-32 h-32 bg-green-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"></div>
-        <div className="absolute top-40 right-32 w-24 h-24 bg-yellow-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse animation-delay-1000"></div>
-        <div className="absolute bottom-32 left-32 w-28 h-28 bg-orange-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse animation-delay-2000"></div>
-        <div className="absolute bottom-20 right-20 w-20 h-20 bg-green-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse animation-delay-3000"></div>
+        <div
+          className="absolute top-40 right-32 w-24 h-24 bg-yellow-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"
+          style={{ animationDelay: "1s" }}
+        ></div>
+        <div
+          className="absolute bottom-32 left-32 w-28 h-28 bg-orange-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"
+          style={{ animationDelay: "2s" }}
+        ></div>
+        <div
+          className="absolute bottom-20 right-20 w-20 h-20 bg-green-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"
+          style={{ animationDelay: "3s" }}
+        ></div>
       </div>
 
       <Card className="w-full max-w-md relative z-10 bg-white/90 backdrop-blur-sm border-0 shadow-2xl">
@@ -139,18 +148,6 @@ export default function HomePage() {
           </div>
         </CardContent>
       </Card>
-
-      <style jsx>{`
-        .animation-delay-1000 {
-          animation-delay: 1s;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-3000 {
-          animation-delay: 3s;
-        }
-      `}</style>
     </div>
   )
 }
