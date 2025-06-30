@@ -1,5 +1,5 @@
-import { initializeApp, getApps } from "firebase/app"
-import { getAuth, GoogleAuthProvider } from "firebase/auth"
+import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
+import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,23 +10,39 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-// Initialize Firebase only if it hasn't been initialized yet
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+let app: FirebaseApp
+let auth: Auth
+let googleProvider: GoogleAuthProvider
 
-// Initialize Firebase Auth and Google Provider only on client side
-export function getFirebaseAuth() {
+export function getFirebaseAuth(): Auth {
   if (typeof window === "undefined") {
     throw new Error("Firebase Auth can only be used on the client side")
   }
-  return getAuth(app)
+
+  if (!auth) {
+    // Initialize Firebase app if not already initialized
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig)
+    } else {
+      app = getApps()[0]
+    }
+
+    auth = getAuth(app)
+  }
+
+  return auth
 }
 
-export function getGoogleProvider() {
+export function getGoogleProvider(): GoogleAuthProvider {
   if (typeof window === "undefined") {
-    throw new Error("Google Provider can only be used on the client side")
+    throw new Error("Google provider can only be used on the client side")
   }
-  const provider = new GoogleAuthProvider()
-  provider.addScope("email")
-  provider.addScope("profile")
-  return provider
+
+  if (!googleProvider) {
+    googleProvider = new GoogleAuthProvider()
+    googleProvider.addScope("email")
+    googleProvider.addScope("profile")
+  }
+
+  return googleProvider
 }

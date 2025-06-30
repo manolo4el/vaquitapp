@@ -56,7 +56,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Elementos decorativos de fondo */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-32 h-32 bg-green-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"></div>
@@ -65,13 +65,13 @@ export default function HomePage() {
         <div className="absolute bottom-20 right-20 w-20 h-20 bg-green-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse animation-delay-3000"></div>
       </div>
 
-      <Card className="w-full max-w-md relative z-10 bg-white/80 backdrop-blur-sm border-0 shadow-2xl">
+      <Card className="w-full max-w-md relative z-10 bg-white/90 backdrop-blur-sm border-0 shadow-2xl">
         <CardContent className="p-8 text-center">
           {/* Logo */}
           <div className="mb-8">
             <VaquitappLogo size="xl" className="justify-center mb-4" />
             <h1 className="text-3xl font-bold text-gray-800 mb-2">¡Hola!</h1>
-            <p className="text-gray-600">Divide gastos con tus amigos de forma súper fácil</p>
+            <p className="text-gray-600">Divide gastos con tus amigos súper fácil</p>
           </div>
 
           {/* Error message */}
@@ -83,7 +83,7 @@ export default function HomePage() {
           <Button
             onClick={handleSignIn}
             disabled={isSigningIn}
-            className="w-full bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-sm h-12 text-base font-medium"
+            className="w-full bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-sm h-12 text-base font-medium mb-6"
             variant="outline"
           >
             {isSigningIn ? (
@@ -117,7 +117,7 @@ export default function HomePage() {
           </Button>
 
           {/* Features */}
-          <div className="mt-8 grid grid-cols-3 gap-4 text-center">
+          <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
                 <span className="text-2xl">👥</span>
@@ -137,9 +137,6 @@ export default function HomePage() {
               <p className="text-xs text-gray-600">Sin complicaciones</p>
             </div>
           </div>
-
-          {/* Footer text */}
-          <p className="text-xs text-gray-500 mt-6">Al continuar, aceptas nuestros términos de servicio</p>
         </CardContent>
       </Card>
 
