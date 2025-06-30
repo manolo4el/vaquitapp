@@ -14,7 +14,6 @@ import { VaquitappLogo } from "@/components/vaquitapp-logo"
 import { getConsolidatedDebts, formatDebtsForModal, formatCreditsForModal } from "@/lib/debt-calculator"
 import DebtsOwedModal from "@/components/debts-owed-modal"
 import DebtsOweModal from "@/components/debts-owe-modal"
-import { debugUserState, clearUserData } from "@/lib/auth"
 
 export default function DashboardPage() {
   const [groups, setGroups] = useState<any[]>([])
@@ -203,28 +202,13 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold text-gray-800 mb-2">¡Hola, {user?.name || "Usuario"}!</h1>
             <p className="text-gray-600 mb-4">Gestiona tus gastos compartidos</p>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button
-                onClick={handleCreateGroup}
-                className="w-full sm:w-auto bg-gradient-to-r from-lime-500 to-lime-600 hover:from-lime-600 hover:to-lime-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 py-6 px-8 text-lg font-medium rounded-xl"
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Nuevo grupo
-              </Button>
-
-              {/* ✅ Botón de debugging más visible */}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  console.log("🔍 Debugging user state...")
-                  debugUserState()
-                  alert("Revisa la consola del navegador para ver el debug")
-                }}
-                className="w-full sm:w-auto border-orange-300 text-orange-600 hover:bg-orange-50"
-              >
-                🐛 Debug Usuario
-              </Button>
-            </div>
+            <Button
+              onClick={handleCreateGroup}
+              className="w-full sm:w-auto bg-gradient-to-r from-lime-500 to-lime-600 hover:from-lime-600 hover:to-lime-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 py-6 px-8 text-lg font-medium rounded-xl"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Nuevo grupo
+            </Button>
           </div>
 
           {/* ✅ Lista de grupos - Solo grupos reales del usuario */}
