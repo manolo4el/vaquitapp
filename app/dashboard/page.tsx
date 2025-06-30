@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -228,7 +229,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             ) : (
-              groups.map((group) => (
+              groups.map((group: any) => (
                 <Card
                   key={group.id}
                   className="hover:shadow-lg transition-all duration-200 cursor-pointer border-0 bg-white/70 backdrop-blur-sm hover:bg-white/90"
