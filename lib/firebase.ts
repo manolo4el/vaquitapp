@@ -1,5 +1,4 @@
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
-import { getAuth, type Auth } from "firebase/auth"
+import { initializeApp, getApps, getApp } from "firebase/app"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,30 +9,7 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-let app: FirebaseApp
-let auth: Auth | null = null
+// Initialize Firebase
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
 
-// Initialize Firebase only on client side
-export function getFirebaseApp(): FirebaseApp {
-  if (typeof window === "undefined") {
-    throw new Error("Firebase can only be initialized on the client side")
-  }
-
-  if (!app) {
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
-  }
-  return app
-}
-
-// Get Firebase Auth instance
-export function getFirebaseAuth(): Auth {
-  if (typeof window === "undefined") {
-    throw new Error("Firebase Auth can only be used on the client side")
-  }
-
-  if (!auth) {
-    const app = getFirebaseApp()
-    auth = getAuth(app)
-  }
-  return auth
-}
+export default app

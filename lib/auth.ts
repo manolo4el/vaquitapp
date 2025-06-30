@@ -1,12 +1,3 @@
-import {
-  signInWithPopup,
-  GoogleAuthProvider,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  type User as FirebaseUser,
-} from "firebase/auth"
-import { getFirebaseAuth } from "./firebase"
-
 export interface User {
   id: string
   name: string
@@ -18,32 +9,6 @@ export interface User {
 // Claves para localStorage
 const USER_STORAGE_KEY = "amigo-gastos-user"
 const PENDING_INVITE_KEY = "amigo-gastos-pending-invite"
-
-let googleProvider: GoogleAuthProvider | null = null
-
-function getGoogleProvider(): GoogleAuthProvider {
-  if (typeof window === "undefined") {
-    throw new Error("Google provider can only be used on the client side")
-  }
-
-  if (!googleProvider) {
-    googleProvider = new GoogleAuthProvider()
-    googleProvider.addScope("email")
-    googleProvider.addScope("profile")
-  }
-  return googleProvider
-}
-
-// Función para convertir usuario de Firebase a nuestro formato
-function mapFirebaseUser(firebaseUser: FirebaseUser): User {
-  return {
-    id: firebaseUser.uid,
-    name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Usuario",
-    email: firebaseUser.email || "",
-    avatar: firebaseUser.photoURL || undefined,
-    alias: "", // Se configurará en el perfil
-  }
-}
 
 // Función para obtener usuario actual
 export function getCurrentUser(): User | null {
@@ -80,85 +45,39 @@ function clearUser(): void {
   }
 }
 
-// Login con Google
-export async function signInWithGoogle(): Promise<User | null> {
-  try {
-    if (typeof window === "undefined") {
-      throw new Error("Sign in can only be performed on the client side")
-    }
-
-    const auth = getFirebaseAuth()
-    const provider = getGoogleProvider()
-    const result = await signInWithPopup(auth, provider)
-    const firebaseUser = result.user
-
-    if (!firebaseUser) {
-      throw new Error("No se pudo obtener información del usuario")
-    }
-
-    console.log("Login exitoso:", firebaseUser.email)
-
-    // Convertir a nuestro formato
-    const user = mapFirebaseUser(firebaseUser)
-
-    // Guardar en localStorage
-    saveUser(user)
-
-    return user
-  } catch (error) {
-    console.error("Error signing in with Google:", error)
-    throw error
+// Login con Google (simulado por ahora)
+export async function signInWithGoogle(): Promise<User> {
+  // Simular login exitoso
+  const mockUser: User = {
+    id: "mock-user-id",
+    name: "Usuario Demo",
+    email: "demo@example.com",
+    avatar: "https://via.placeholder.com/40",
+    alias: "",
   }
+
+  saveUser(mockUser)
+  return mockUser
 }
 
 // Logout
 export async function signOut(): Promise<void> {
-  try {
-    if (typeof window === "undefined") {
-      throw new Error("Sign out can only be performed on the client side")
-    }
-
-    const auth = getFirebaseAuth()
-    await firebaseSignOut(auth)
-
-    clearUser()
-    console.log("Logout exitoso")
-  } catch (error) {
-    console.error("Error signing out:", error)
-    // Limpiar usuario aunque haya error en Firebase
-    clearUser()
-    throw error
-  }
+  clearUser()
+  console.log("Logout exitoso")
 }
 
-// Listener de cambios de autenticación
+// Listener de cambios de autenticación (simplificado)
 export function onAuthChange(callback: (user: User | null) => void): () => void {
   if (typeof window === "undefined") {
-    console.warn("onAuthChange solo disponible en el cliente")
     return () => {}
   }
 
-  try {
-    const auth = getFirebaseAuth()
-    if (!auth) {
-      console.warn("Firebase Auth no disponible para listener")
-      return () => {}
-    }
+  // Verificar usuario actual inmediatamente
+  const currentUser = getCurrentUser()
+  callback(currentUser)
 
-    return onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        const user = mapFirebaseUser(firebaseUser)
-        saveUser(user)
-        callback(user)
-      } else {
-        clearUser()
-        callback(null)
-      }
-    })
-  } catch (error) {
-    console.error("Error setting up auth listener:", error)
-    return () => {}
-  }
+  // Retornar función de cleanup vacía
+  return () => {}
 }
 
 // Funciones para manejar invitaciones pendientes

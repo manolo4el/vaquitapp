@@ -1,8 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import type { User } from "firebase/auth"
-import { onAuthChange, signInWithGoogle, signOut } from "@/lib/auth"
+import { getCurrentUser, onAuthChange, signInWithGoogle, signOut, type User } from "@/lib/auth"
 
 interface AuthContextType {
   user: User | null
@@ -18,31 +17,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    // Verificar usuario inicial
+    const currentUser = getCurrentUser()
+    setUser(currentUser)
+    setLoading(false)
+
+    // Configurar listener de cambios
+    const unsubscribe = onAuthChange((user) => {
+      setUser(user)
       setLoading(false)
-      return
-    }
+    })
 
-    // Add a small delay to ensure Firebase is ready
-    const timer = setTimeout(() => {
-      try {
-        const unsubscribe = onAuthChange((user) => {
-          setUser(user)
-          setLoading(false)
-        })
-        return unsubscribe
-      } catch (error) {
-        console.error("Error setting up auth listener:", error)
-        setLoading(false)
-      }
-    }, 100)
-
-    return () => clearTimeout(timer)
+    return unsubscribe
   }, [])
 
   const handleSignIn = async () => {
     try {
-      await signInWithGoogle()
+      const user = await signInWithGoogle()
+      setUser(user)
     } catch (error) {
       console.error("Error signing in:", error)
     }
@@ -51,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleSignOut = async () => {
     try {
       await signOut()
+      setUser(null)
     } catch (error) {
       console.error("Error signing out:", error)
     }
