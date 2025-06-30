@@ -14,6 +14,7 @@ import { VaquitappLogo } from "@/components/vaquitapp-logo"
 import { getConsolidatedDebts, formatDebtsForModal, formatCreditsForModal } from "@/lib/debt-calculator"
 import DebtsOwedModal from "@/components/debts-owed-modal"
 import DebtsOweModal from "@/components/debts-owe-modal"
+import { migrateLocalGroupsToFirestore } from "@/lib/group-firestore"
 
 export default function DashboardPage() {
   const [groups, setGroups] = useState<any[]>([])
@@ -28,6 +29,18 @@ export default function DashboardPage() {
 
     loadDashboardData()
   }, [user])
+
+  useEffect(() => {
+    // Migrar grupos locales a Firestore automáticamente
+    if (typeof window !== "undefined") {
+      const localGroups = localStorage.getItem("amigo-gastos-groups")
+      if (localGroups && JSON.parse(localGroups).length > 0) {
+        migrateLocalGroupsToFirestore().then(() => {
+          console.log("Migración de grupos locales a Firestore completada.")
+        })
+      }
+    }
+  }, [])
 
   const loadDashboardData = () => {
     try {
