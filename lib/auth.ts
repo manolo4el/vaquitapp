@@ -3,11 +3,12 @@ import { auth, googleProvider } from "./firebase"
 
 // Sistema de autenticación con Firebase
 export interface User {
-  id: string // Cambiar de number a string para Firebase UID
+  id: string // Firebase UID
   name: string
   email: string
   avatar?: string
   alias?: string
+  provider?: string // Agregar proveedor para debugging
 }
 
 const PENDING_INVITE_KEY = "amigo-gastos-pending-invite"
@@ -19,6 +20,14 @@ let authInitialized = false
 
 // Convertir Firebase User a nuestro User interface
 function firebaseUserToUser(firebaseUser: FirebaseUser): User {
+  console.log("🔄 Converting Firebase user:", {
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    displayName: firebaseUser.displayName,
+    photoURL: firebaseUser.photoURL,
+    providerData: firebaseUser.providerData
+  })
+
   // Buscar datos adicionales del perfil guardados localmente
   const savedProfile = localStorage.getItem(USER_PROFILE_KEY)
   let additionalData = { alias: "" }
@@ -26,8 +35,10 @@ function firebaseUserToUser(firebaseUser: FirebaseUser): User {
   if (savedProfile) {
     try {
       const parsed = JSON.parse(savedProfile)
-      if (parsed.id === firebaseUser.uid) {
+      // ✅ Buscar por email también, no solo por ID
+      if (parsed.id === firebaseUser.uid || parsed.email === firebaseUser.email) {
         additionalData = parsed
+        console.log("📦 Found saved profile for user:", parsed)
       }
     } catch (error) {
       console.error("Error parsing saved profile:", error)
@@ -40,11 +51,19 @@ function firebaseUserToUser(firebaseUser: FirebaseUser): User {
     email: firebaseUser.email || "",
     avatar: firebaseUser.photoURL || undefined,
     alias: additionalData.alias || "",
+    provider: firebaseUser.providerData[0]?.providerId || "unknown"
   }
 
   // ✅ Guardar estado de autenticación en localStorage
   localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(user))
-  console.log("Usuario autenticado y guardado:", user)
+  localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(user))
+  
+  console.log("✅ Usuario autenticado y guardado:", {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    provider: user.provider
+  })
 
   return user
 }
@@ -52,7 +71,7 @@ function firebaseUserToUser(firebaseUser: FirebaseUser): User {
 export function getCurrentUser(): User | null {
   // ✅ Si ya tenemos el usuario en memoria, devolverlo
   if (currentUser) {
-    console.log("Usuario desde memoria:", currentUser)
+    console.log("👤 Usuario desde memoria:", currentUser.email)
     return currentUser
   }
 
@@ -61,7 +80,7 @@ export function getCurrentUser(): User | null {
     const savedAuth = localStorage.getItem(AUTH_STATE_KEY)
     if (savedAuth) {
       const parsedUser = JSON.parse(savedAuth)
-      console.log("Usuario cargado desde localStorage:", parsedUser)
+      console.log("📱 Usuario cargado desde localStorage:", parsedUser.email)
       currentUser = parsedUser
       return parsedUser
     }
@@ -69,7 +88,7 @@ export function getCurrentUser(): User | null {
     console.error("Error al cargar usuario desde localStorage:", error)
   }
 
-  console.log("No hay usuario autenticado")
+  console.log("❌ No hay usuario autenticado")
   return null
 }
 
@@ -83,25 +102,25 @@ export function updateUserProfile(updates: Partial<User>): User | null {
   localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedUser))
   localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(updatedUser))
 
-  console.log("Perfil de usuario actualizado:", updatedUser)
+  console.log("🔄 Perfil de usuario actualizado:", updatedUser)
   return updatedUser
 }
 
 export function isLoggedIn(): boolean {
   const user = getCurrentUser()
   const isLogged = user !== null
-  console.log("¿Usuario logueado?", isLogged, user ? user.name : "No user")
+  console.log("🔐 ¿Usuario logueado?", isLogged, user ? user.email : "No user")
   return isLogged
 }
 
 // ✅ Mejorar inicialización de autenticación
 export function initializeAuth(): Promise<User | null> {
   return new Promise((resolve, reject) => {
-    console.log("Inicializando autenticación...")
+    console.log("🚀 Inicializando autenticación...")
 
     // Si ya está inicializado, devolver el usuario actual
     if (authInitialized) {
-      console.log("Auth ya inicializado, devolviendo usuario actual")
+      console.log("✅ Auth ya inicializado, devolviendo usuario actual")
       resolve(getCurrentUser())
       return
     }
@@ -109,18 +128,22 @@ export function initializeAuth(): Promise<User | null> {
     // ✅ Verificar primero si hay un usuario en localStorage
     const savedUser = getCurrentUser()
     if (savedUser) {
-      console.log("Usuario encontrado en localStorage, verificando con Firebase...")
+      console.log("📱 Usuario encontrado en localStorage, verificando con Firebase...")
     }
 
     const unsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => {
-        console.log("Estado de autenticación de Firebase:", firebaseUser ? firebaseUser.email : "No user")
+        console.log("🔥 Estado de autenticación de Firebase:", firebaseUser ? {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          provider: firebaseUser.providerData[0]?.providerId
+        } : "No user")
 
         if (firebaseUser) {
           currentUser = firebaseUserToUser(firebaseUser)
           authInitialized = true
-          console.log("Usuario autenticado exitosamente:", currentUser)
+          console.log("✅ Usuario autenticado exitosamente:", currentUser.email)
           resolve(currentUser)
         } else {
           // ✅ Si Firebase dice que no hay usuario, limpiar localStorage
@@ -128,13 +151,13 @@ export function initializeAuth(): Promise<User | null> {
           localStorage.removeItem(AUTH_STATE_KEY)
           localStorage.removeItem(USER_PROFILE_KEY)
           authInitialized = true
-          console.log("No hay usuario autenticado en Firebase")
+          console.log("❌ No hay usuario autenticado en Firebase")
           resolve(null)
         }
         unsubscribe()
       },
       (error) => {
-        console.error("Error en onAuthStateChanged:", error)
+        console.error("❌ Error en onAuthStateChanged:", error)
         authInitialized = true
         reject(error)
       },
@@ -143,7 +166,7 @@ export function initializeAuth(): Promise<User | null> {
     // ✅ Timeout de seguridad
     setTimeout(() => {
       if (!authInitialized) {
-        console.warn("Timeout en inicialización de auth, usando localStorage")
+        console.warn("⏰ Timeout en inicialización de auth, usando localStorage")
         unsubscribe()
         authInitialized = true
         resolve(getCurrentUser())
@@ -155,7 +178,7 @@ export function initializeAuth(): Promise<User | null> {
 // Login con Google usando Firebase
 export async function loginWithGoogle(): Promise<User> {
   try {
-    console.log("Iniciando login con Google...")
+    console.log("🔐 Iniciando login con Google...")
 
     // Verificar que Firebase esté inicializado
     if (!auth) {
@@ -169,13 +192,18 @@ export async function loginWithGoogle(): Promise<User> {
       throw new Error("No se pudo obtener información del usuario")
     }
 
-    console.log("Login exitoso:", firebaseUser)
+    console.log("✅ Login exitoso:", {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      provider: firebaseUser.providerData[0]?.providerId
+    })
+    
     currentUser = firebaseUserToUser(firebaseUser)
     authInitialized = true
 
     return currentUser
   } catch (error: any) {
-    console.error("Error en login con Google:", error)
+    console.error("❌ Error en login con Google:", error)
 
     // Manejar errores específicos
     if (error.code === "auth/popup-closed-by-user") {
@@ -197,15 +225,19 @@ export async function loginWithGoogle(): Promise<User> {
 // Logout
 export async function logout(): Promise<void> {
   try {
+    console.log("🚪 Iniciando logout...")
     await signOut(auth)
+    
+    // Limpiar estado local
     currentUser = null
-    authInitialized = false
-    localStorage.removeItem(USER_PROFILE_KEY)
     localStorage.removeItem(AUTH_STATE_KEY)
-    console.log("Logout exitoso")
+    localStorage.removeItem(USER_PROFILE_KEY)
+    authInitialized = false
+    
+    console.log("✅ Logout exitoso")
   } catch (error) {
-    console.error("Error en logout:", error)
-    throw new Error("Error al cerrar sesión")
+    console.error("❌ Error en logout:", error)
+    throw error
   }
 }
 
@@ -256,4 +288,42 @@ export function validateAlias(alias: string): { isValid: boolean; error?: string
   }
 
   return { isValid: true }
+}
+
+// ✅ Función de debugging para diagnosticar problemas de usuarios
+export function debugUserState(): void {
+  console.log("🔍 === DEBUG USER STATE ===")
+  
+  // Verificar localStorage
+  const savedAuth = localStorage.getItem(AUTH_STATE_KEY)
+  const savedProfile = localStorage.getItem(USER_PROFILE_KEY)
+  
+  console.log("📱 localStorage AUTH_STATE:", savedAuth ? JSON.parse(savedAuth) : "null")
+  console.log("📱 localStorage USER_PROFILE:", savedProfile ? JSON.parse(savedProfile) : "null")
+  
+  // Verificar estado en memoria
+  console.log("🧠 Current user in memory:", currentUser)
+  console.log("🔧 Auth initialized:", authInitialized)
+  
+  // Verificar Firebase Auth
+  if (auth) {
+    const firebaseUser = auth.currentUser
+    console.log("🔥 Firebase current user:", firebaseUser ? {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      provider: firebaseUser.providerData[0]?.providerId
+    } : "null")
+  }
+  
+  console.log("🔍 === END DEBUG ===")
+}
+
+// ✅ Función para limpiar datos de usuario (útil para testing)
+export function clearUserData(): void {
+  console.log("🧹 Limpiando datos de usuario...")
+  currentUser = null
+  authInitialized = false
+  localStorage.removeItem(AUTH_STATE_KEY)
+  localStorage.removeItem(USER_PROFILE_KEY)
+  console.log("✅ Datos de usuario limpiados")
 }

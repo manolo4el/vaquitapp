@@ -14,6 +14,7 @@ import { VaquitappLogo } from "@/components/vaquitapp-logo"
 import { getConsolidatedDebts, formatDebtsForModal, formatCreditsForModal } from "@/lib/debt-calculator"
 import DebtsOwedModal from "@/components/debts-owed-modal"
 import DebtsOweModal from "@/components/debts-owe-modal"
+import { debugUserState, clearUserData } from "@/lib/auth"
 
 export default function DashboardPage() {
   const [groups, setGroups] = useState<any[]>([])
@@ -179,6 +180,20 @@ export default function DashboardPage() {
 
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="rounded-full p-2 hover:bg-gray-100">
                   <LogOut className="w-5 h-5" />
+                </Button>
+
+                {/* ✅ Botón de debugging temporal */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    console.log("🔍 Debugging user state...")
+                    debugUserState()
+                  }}
+                  className="rounded-full p-2 hover:bg-gray-100 text-xs"
+                  title="Debug user state"
+                >
+                  🐛
                 </Button>
 
                 <Avatar className="w-8 h-8">
