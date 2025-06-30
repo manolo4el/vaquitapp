@@ -6,17 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { VaquitappLogo } from "@/components/vaquitapp-logo"
 import { useAuth } from "@/hooks/use-auth"
-import { signInWithGoogle } from "@/lib/auth"
 
 export default function HomePage() {
-  const { user, loading } = useAuth()
+  const { user, loading, signIn } = useAuth()
   const [isSigningIn, setIsSigningIn] = useState(false)
   const router = useRouter()
 
   const handleGoogleSignIn = async () => {
     try {
       setIsSigningIn(true)
-      await signInWithGoogle()
+      await signIn()
       router.push("/dashboard")
     } catch (error) {
       console.error("Error signing in:", error)
@@ -45,15 +44,24 @@ export default function HomePage() {
       {/* Elementos decorativos */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-32 h-32 bg-green-200 rounded-full opacity-20 animate-pulse"></div>
-        <div className="absolute top-40 right-32 w-24 h-24 bg-yellow-200 rounded-full opacity-30 animate-bounce"></div>
-        <div className="absolute bottom-32 left-32 w-20 h-20 bg-orange-200 rounded-full opacity-25 animate-pulse"></div>
-        <div className="absolute bottom-20 right-20 w-28 h-28 bg-green-300 rounded-full opacity-20 animate-bounce"></div>
+        <div
+          className="absolute top-40 right-32 w-24 h-24 bg-yellow-200 rounded-full opacity-30 animate-bounce"
+          style={{ animationDelay: "1s" }}
+        ></div>
+        <div
+          className="absolute bottom-32 left-32 w-20 h-20 bg-orange-200 rounded-full opacity-25 animate-pulse"
+          style={{ animationDelay: "2s" }}
+        ></div>
+        <div
+          className="absolute bottom-20 right-20 w-28 h-28 bg-green-300 rounded-full opacity-20 animate-bounce"
+          style={{ animationDelay: "0.5s" }}
+        ></div>
       </div>
 
       <Card className="w-full max-w-md bg-white/80 backdrop-blur-sm shadow-xl border-0">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
-            <VaquitappLogo size={80} />
+            <VaquitappLogo size="xl" />
           </div>
           <CardTitle className="text-2xl font-bold text-gray-800">¡Bienvenido! 🎉</CardTitle>
           <CardDescription className="text-gray-600 text-base">

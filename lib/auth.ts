@@ -1,4 +1,13 @@
-export interface User {
+import {
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  type User,
+} from "firebase/auth"
+import { getFirebaseAuth } from "./firebase"
+
+export interface AuthUser {
   id: string
   name: string
   email: string
@@ -6,16 +15,67 @@ export interface User {
   alias?: string
 }
 
-// Claves para localStorage
-const USER_STORAGE_KEY = "amigo-gastos-user"
-const PENDING_INVITE_KEY = "amigo-gastos-pending-invite"
+// Función para iniciar sesión con Google
+export async function signInWithGoogle(): Promise<AuthUser> {
+  const auth = getFirebaseAuth()
+  if (!auth) {
+    throw new Error("Firebase Auth no está disponible")
+  }
 
-// Función para obtener usuario actual
-export function getCurrentUser(): User | null {
+  try {
+    const provider = new GoogleAuthProvider()
+    provider.addScope("profile")
+    provider.addScope("email")
+
+    const result = await signInWithPopup(auth, provider)
+    const user = result.user
+
+    const authUser: AuthUser = {
+      id: user.uid,
+      name: user.displayName || "Usuario",
+      email: user.email || "",
+      avatar: user.photoURL || undefined,
+      alias: user.displayName || "Usuario",
+    }
+
+    // Guardar en localStorage para persistencia
+    if (typeof window !== "undefined") {
+      localStorage.setItem("amigo-gastos-user", JSON.stringify(authUser))
+    }
+
+    return authUser
+  } catch (error: any) {
+    console.error("Error en signInWithGoogle:", error)
+    throw new Error(error.message || "Error al iniciar sesión con Google")
+  }
+}
+
+// Función para cerrar sesión
+export async function signOut(): Promise<void> {
+  const auth = getFirebaseAuth()
+  if (!auth) {
+    throw new Error("Firebase Auth no está disponible")
+  }
+
+  try {
+    await firebaseSignOut(auth)
+
+    // Limpiar localStorage
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("amigo-gastos-user")
+    }
+  } catch (error: any) {
+    console.error("Error en signOut:", error)
+    throw new Error(error.message || "Error al cerrar sesión")
+  }
+}
+
+// Función para obtener el usuario actual
+export function getCurrentUser(): AuthUser | null {
   if (typeof window === "undefined") return null
 
   try {
-    const stored = localStorage.getItem(USER_STORAGE_KEY)
+    const stored = localStorage.getItem("amigo-gastos-user")
     return stored ? JSON.parse(stored) : null
   } catch (error) {
     console.error("Error al obtener usuario actual:", error)
@@ -23,130 +83,62 @@ export function getCurrentUser(): User | null {
   }
 }
 
-// Función para guardar usuario
-function saveUser(user: User): void {
-  if (typeof window === "undefined") return
+// Función para escuchar cambios en el estado de autenticación
+export function onAuthChange(callback: (user: AuthUser | null) => void): () => void {
+  const auth = getFirebaseAuth()
+  if (!auth) {
+    console.warn("Firebase Auth no está disponible")
+    return () => {}
+  }
 
   try {
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
+    return onAuthStateChanged(auth, (firebaseUser: User | null) => {
+      if (firebaseUser) {
+        const authUser: AuthUser = {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName || "Usuario",
+          email: firebaseUser.email || "",
+          avatar: firebaseUser.photoURL || undefined,
+          alias: firebaseUser.displayName || "Usuario",
+        }
+
+        // Guardar en localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem("amigo-gastos-user", JSON.stringify(authUser))
+        }
+
+        callback(authUser)
+      } else {
+        // Limpiar localStorage
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("amigo-gastos-user")
+        }
+        callback(null)
+      }
+    })
   } catch (error) {
-    console.error("Error al guardar usuario:", error)
+    console.error("Error configurando listener de auth:", error)
+    return () => {}
   }
-}
-
-// Función para limpiar usuario
-function clearUser(): void {
-  if (typeof window === "undefined") return
-
-  try {
-    localStorage.removeItem(USER_STORAGE_KEY)
-  } catch (error) {
-    console.error("Error al limpiar usuario:", error)
-  }
-}
-
-// Login con Google (simulado por ahora para evitar errores de Firebase)
-export async function signInWithGoogle(): Promise<User> {
-  // Simular un delay de login
-  await new Promise((resolve) => setTimeout(resolve, 1000))
-
-  // Crear usuario simulado
-  const mockUser: User = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-    email: "demo@vaquitapp.com",
-    avatar: "https://via.placeholder.com/40",
-    alias: "",
-  }
-
-  saveUser(mockUser)
-  return mockUser
 }
 
 // Alias para compatibilidad
 export const loginWithGoogle = signInWithGoogle
 
-// Logout
-export async function signOut(): Promise<void> {
-  clearUser()
-  console.log("Logout exitoso")
-}
-
-// Listener de cambios de autenticación (simplificado)
-export function onAuthChange(callback: (user: User | null) => void): () => void {
-  if (typeof window === "undefined") {
-    return () => {}
-  }
-
-  // Verificar usuario actual inmediatamente
-  const currentUser = getCurrentUser()
-  callback(currentUser)
-
-  // Retornar función de cleanup vacía
-  return () => {}
-}
-
-// Funciones para manejar invitaciones pendientes
+// Funciones para invitaciones pendientes
 export function setPendingInvite(inviteCode: string): void {
-  if (typeof window === "undefined") return
-
-  try {
-    localStorage.setItem(PENDING_INVITE_KEY, inviteCode)
-  } catch (error) {
-    console.error("Error al guardar invitación pendiente:", error)
+  if (typeof window !== "undefined") {
+    localStorage.setItem("pending-invite", inviteCode)
   }
 }
 
 export function getPendingInvite(): string | null {
   if (typeof window === "undefined") return null
-
-  try {
-    return localStorage.getItem(PENDING_INVITE_KEY)
-  } catch (error) {
-    console.error("Error al obtener invitación pendiente:", error)
-    return null
-  }
+  return localStorage.getItem("pending-invite")
 }
 
 export function clearPendingInvite(): void {
-  if (typeof window === "undefined") return
-
-  try {
-    localStorage.removeItem(PENDING_INVITE_KEY)
-  } catch (error) {
-    console.error("Error al limpiar invitación pendiente:", error)
-  }
-}
-
-// Función para actualizar perfil de usuario
-export function updateUserProfile(updates: Partial<Pick<User, "name" | "alias">>): User | null {
-  const currentUser = getCurrentUser()
-  if (!currentUser) return null
-
-  const updatedUser = { ...currentUser, ...updates }
-  saveUser(updatedUser)
-
-  return updatedUser
-}
-
-// Función para validar alias
-export function validateAlias(alias: string): { isValid: boolean; error?: string } {
-  if (!alias.trim()) {
-    return { isValid: false, error: "El alias es obligatorio" }
-  }
-
-  // Validar CBU/CVU (22 dígitos)
-  if (/^\d{22}$/.test(alias)) {
-    return { isValid: true }
-  }
-
-  // Validar alias alfanumérico
-  if (/^[a-zA-Z0-9._-]+$/.test(alias) && alias.length >= 3 && alias.length <= 30) {
-    return { isValid: true }
-  }
-
-  return {
-    isValid: false,
-    error: "Debe ser un alias válido (3-30 caracteres alfanuméricos) o un CBU/CVU de 22 dígitos",
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("pending-invite")
   }
 }

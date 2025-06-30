@@ -1,5 +1,5 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
-import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth"
+import { getAuth, type Auth } from "firebase/auth"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,53 +10,62 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-// Initialize Firebase
-const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
-
+let app: FirebaseApp
 let auth: Auth
-let googleProvider: GoogleAuthProvider
 
 // Función para inicializar Firebase de forma segura
 function initializeFirebase() {
   if (typeof window === "undefined") {
-    throw new Error("Firebase can only be initialized on the client side")
+    return null
   }
 
-  if (!auth) {
+  try {
+    // Verificar si ya existe una app inicializada
+    const existingApps = getApps()
+    if (existingApps.length > 0) {
+      app = existingApps[0]
+    } else {
+      app = initializeApp(firebaseConfig)
+    }
+
+    // Inicializar Auth
     auth = getAuth(app)
-  }
 
-  if (!googleProvider) {
-    googleProvider = new GoogleAuthProvider()
-    googleProvider.addScope("email")
-    googleProvider.addScope("profile")
+    return { app, auth }
+  } catch (error) {
+    console.error("Error inicializando Firebase:", error)
+    return null
   }
 }
 
-// Función para obtener la instancia de Auth
-export function getFirebaseAuth(): Auth {
+// Función para obtener la instancia de Auth de forma segura
+export function getFirebaseAuth(): Auth | null {
   if (typeof window === "undefined") {
-    throw new Error("Firebase Auth can only be used on the client side")
+    return null
   }
 
   if (!auth) {
-    initializeFirebase()
+    const firebase = initializeFirebase()
+    if (!firebase) return null
+    auth = firebase.auth
   }
 
   return auth
 }
 
-// Función para obtener el provider de Google
-export function getGoogleProvider(): GoogleAuthProvider {
+// Función para obtener la app de Firebase
+export function getFirebaseApp(): FirebaseApp | null {
   if (typeof window === "undefined") {
-    throw new Error("Google provider can only be used on the client side")
+    return null
   }
 
-  if (!googleProvider) {
-    initializeFirebase()
+  if (!app) {
+    const firebase = initializeFirebase()
+    if (!firebase) return null
+    app = firebase.app
   }
 
-  return googleProvider
+  return app
 }
 
-export default app
+export { app, auth }
