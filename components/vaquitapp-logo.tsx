@@ -1,17 +1,30 @@
-"use client"
-
-import Image from "next/image"
+import { cn } from "@/lib/utils"
 
 interface VaquitappLogoProps {
-  size?: number
+  size?: number | "sm" | "md" | "lg" | "xl"
   className?: string
+  showText?: boolean
 }
 
-export function VaquitappLogo({ size = 40, className = "" }: VaquitappLogoProps) {
+export function VaquitappLogo({ size = "md", className, showText = false }: VaquitappLogoProps) {
+  const sizeMap = {
+    sm: 32,
+    md: 48,
+    lg: 64,
+    xl: 80,
+  }
+
+  const iconSize = typeof size === "number" ? size : sizeMap[size]
+  const textSize = typeof size === "number" ? size / 3 : sizeMap[size] / 3
+
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <Image src="/vaquitapp-icon.svg" alt="VaquitApp" width={size} height={size} className="text-green-600" />
-      <span className="text-xl font-bold text-green-700">VaquitApp</span>
+    <div className={cn("flex items-center gap-3", className)}>
+      <img src="/vaquitapp-icon.svg" alt="VaquitApp" width={iconSize} height={iconSize} className="flex-shrink-0" />
+      {showText && (
+        <span className="font-bold text-green-700" style={{ fontSize: `${textSize}px` }}>
+          VaquitApp
+        </span>
+      )}
     </div>
   )
 }

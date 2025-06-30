@@ -20,15 +20,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Verificar usuario inicial
     const currentUser = getCurrentUser()
     setUser(currentUser)
-    setLoading(false)
 
-    // Configurar listener de cambios
-    const unsubscribe = onAuthChange((user) => {
-      setUser(user)
+    // Si ya hay un usuario, no necesitamos esperar a Firebase
+    if (currentUser) {
       setLoading(false)
-    })
+    }
 
-    return unsubscribe
+    // Configurar listener de cambios con delay para evitar errores de Firebase
+    const timer = setTimeout(() => {
+      try {
+        const unsubscribe = onAuthChange((user) => {
+          setUser(user)
+          setLoading(false)
+        })
+        return unsubscribe
+      } catch (error) {
+        console.error("Error setting up auth listener:", error)
+        setLoading(false)
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
   }, [])
 
   const handleSignIn = async () => {
@@ -37,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(user)
     } catch (error) {
       console.error("Error signing in:", error)
+      throw error
     }
   }
 
@@ -46,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
     } catch (error) {
       console.error("Error signing out:", error)
+      throw error
     }
   }
 

@@ -1,22 +1,33 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { VaquitappLogo } from "@/components/vaquitapp-logo"
 import { useAuth } from "@/hooks/use-auth"
-import { Users, Calculator, Share2, Smartphone } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 export default function HomePage() {
   const { user, loading, signIn } = useAuth()
   const [isSigningIn, setIsSigningIn] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    if (user && !loading) {
+      router.push("/dashboard")
+    }
+  }, [user, loading, router])
 
   const handleSignIn = async () => {
     setIsSigningIn(true)
+    setError(null)
     try {
       await signIn()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al iniciar sesión:", error)
+      setError(error.message || "Error al iniciar sesión")
     } finally {
       setIsSigningIn(false)
     }
@@ -24,10 +35,10 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-green-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50">
         <div className="text-center">
-          <VaquitappLogo size={60} />
-          <p className="mt-4 text-green-600">Cargando...</p>
+          <VaquitappLogo size="lg" className="justify-center mb-4" />
+          <Loader2 className="w-6 h-6 animate-spin text-green-600 mx-auto" />
         </div>
       </div>
     )
@@ -35,154 +46,114 @@ export default function HomePage() {
 
   if (user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center mb-8">
-            <VaquitappLogo size={60} className="justify-center mb-4" />
-            <h1 className="text-3xl font-bold text-green-800 mb-2">¡Bienvenido, {user.name}!</h1>
-            <p className="text-green-600">¿Qué quieres hacer hoy?</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-green-200">
-              <CardHeader className="text-center">
-                <Users className="w-12 h-12 text-green-600 mx-auto mb-2" />
-                <CardTitle className="text-green-800">Crear Grupo</CardTitle>
-                <CardDescription>Crea un nuevo grupo para dividir gastos</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full bg-green-600 hover:bg-green-700">Crear Grupo</Button>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-green-200">
-              <CardHeader className="text-center">
-                <Share2 className="w-12 h-12 text-green-600 mx-auto mb-2" />
-                <CardTitle className="text-green-800">Unirse a Grupo</CardTitle>
-                <CardDescription>Únete a un grupo existente con un código</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  variant="outline"
-                  className="w-full border-green-600 text-green-600 hover:bg-green-50 bg-transparent"
-                >
-                  Unirse
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="mt-12 text-center">
-            <h2 className="text-2xl font-bold text-green-800 mb-6">Mis Grupos</h2>
-            <Card className="max-w-md mx-auto border-green-200">
-              <CardContent className="py-8">
-                <Users className="w-16 h-16 text-green-300 mx-auto mb-4" />
-                <p className="text-green-600">No tienes grupos aún</p>
-                <p className="text-sm text-green-500 mt-2">Crea tu primer grupo para empezar</p>
-              </CardContent>
-            </Card>
-          </div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50">
+        <div className="text-center">
+          <VaquitappLogo size="lg" className="justify-center mb-4" />
+          <p className="text-green-600">Redirigiendo al dashboard...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100">
-      {/* Header */}
-      <header className="container mx-auto px-4 py-6">
-        <div className="flex justify-between items-center">
-          <VaquitappLogo size={50} />
-          <Button onClick={handleSignIn} disabled={isSigningIn} className="bg-green-600 hover:bg-green-700">
-            {isSigningIn ? "Iniciando..." : "Iniciar Sesión"}
-          </Button>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50 flex items-center justify-center p-4">
+      {/* Elementos decorativos de fondo */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-20 w-32 h-32 bg-green-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"></div>
+        <div className="absolute top-40 right-32 w-24 h-24 bg-yellow-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse animation-delay-1000"></div>
+        <div className="absolute bottom-32 left-32 w-28 h-28 bg-orange-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse animation-delay-2000"></div>
+        <div className="absolute bottom-20 right-20 w-20 h-20 bg-green-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse animation-delay-3000"></div>
+      </div>
 
-      {/* Hero Section */}
-      <section className="container mx-auto px-4 py-16 text-center">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-5xl font-bold text-green-800 mb-6">Divide gastos con tus amigos de forma fácil</h1>
-          <p className="text-xl text-green-600 mb-8 max-w-2xl mx-auto">
-            VaquitApp te ayuda a llevar un control claro de los gastos compartidos. Sin complicaciones, sin deudas
-            olvidadas.
-          </p>
+      <Card className="w-full max-w-md relative z-10 bg-white/80 backdrop-blur-sm border-0 shadow-2xl">
+        <CardContent className="p-8 text-center">
+          {/* Logo */}
+          <div className="mb-8">
+            <VaquitappLogo size="xl" className="justify-center mb-4" />
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">¡Hola!</h1>
+            <p className="text-gray-600">Divide gastos con tus amigos de forma súper fácil</p>
+          </div>
+
+          {/* Error message */}
+          {error && (
+            <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{error}</div>
+          )}
+
+          {/* Google Sign In Button */}
           <Button
-            size="lg"
             onClick={handleSignIn}
             disabled={isSigningIn}
-            className="bg-green-600 hover:bg-green-700 text-lg px-8 py-3"
+            className="w-full bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-sm h-12 text-base font-medium"
+            variant="outline"
           >
-            {isSigningIn ? "Iniciando..." : "Comenzar Gratis"}
+            {isSigningIn ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                Iniciando sesión...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  />
+                </svg>
+                Continuar con Google
+              </>
+            )}
           </Button>
-        </div>
-      </section>
 
-      {/* Features */}
-      <section className="container mx-auto px-4 py-16">
-        <h2 className="text-3xl font-bold text-center text-green-800 mb-12">¿Por qué elegir VaquitApp?</h2>
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          <Card className="text-center border-green-200">
-            <CardHeader>
-              <Calculator className="w-12 h-12 text-green-600 mx-auto mb-4" />
-              <CardTitle className="text-green-800">Cálculo Automático</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-green-600">
-                Calcula automáticamente quién debe qué a quién. Sin matemáticas complicadas.
-              </p>
-            </CardContent>
-          </Card>
+          {/* Features */}
+          <div className="mt-8 grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <span className="text-2xl">👥</span>
+              </div>
+              <p className="text-xs text-gray-600">Grupos fáciles</p>
+            </div>
+            <div>
+              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <span className="text-2xl">🧮</span>
+              </div>
+              <p className="text-xs text-gray-600">Cálculo automático</p>
+            </div>
+            <div>
+              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <span className="text-2xl">💸</span>
+              </div>
+              <p className="text-xs text-gray-600">Sin complicaciones</p>
+            </div>
+          </div>
 
-          <Card className="text-center border-green-200">
-            <CardHeader>
-              <Users className="w-12 h-12 text-green-600 mx-auto mb-4" />
-              <CardTitle className="text-green-800">Grupos Ilimitados</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-green-600">
-                Crea tantos grupos como necesites. Viajes, cenas, gastos del hogar y más.
-              </p>
-            </CardContent>
-          </Card>
+          {/* Footer text */}
+          <p className="text-xs text-gray-500 mt-6">Al continuar, aceptas nuestros términos de servicio</p>
+        </CardContent>
+      </Card>
 
-          <Card className="text-center border-green-200">
-            <CardHeader>
-              <Smartphone className="w-12 h-12 text-green-600 mx-auto mb-4" />
-              <CardTitle className="text-green-800">Fácil de Usar</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-green-600">
-                Interfaz simple e intuitiva. Agrega gastos en segundos desde cualquier dispositivo.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="bg-green-600 py-16">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-white mb-4">¿Listo para simplificar tus gastos compartidos?</h2>
-          <p className="text-green-100 mb-8 text-lg">Únete a miles de usuarios que ya confían en VaquitApp</p>
-          <Button
-            size="lg"
-            onClick={handleSignIn}
-            disabled={isSigningIn}
-            className="bg-white text-green-600 hover:bg-green-50 text-lg px-8 py-3"
-          >
-            {isSigningIn ? "Iniciando..." : "Empezar Ahora"}
-          </Button>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-green-800 py-8">
-        <div className="container mx-auto px-4 text-center">
-          <VaquitappLogo size={40} className="justify-center mb-4" />
-          <p className="text-green-200">© 2024 VaquitApp. Hecho con ❤️ para simplificar tus gastos.</p>
-        </div>
-      </footer>
+      <style jsx>{`
+        .animation-delay-1000 {
+          animation-delay: 1s;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-3000 {
+          animation-delay: 3s;
+        }
+      `}</style>
     </div>
   )
 }

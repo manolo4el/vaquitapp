@@ -1,9 +1,21 @@
-export interface Member {
+export interface Group {
+  id: string
+  name: string
+  description?: string
+  members: GroupMember[]
+  expenses: Expense[]
+  inviteCode: string
+  createdAt: Date
+  createdBy: string
+}
+
+export interface GroupMember {
   id: string
   name: string
   email: string
   avatar?: string
   alias?: string
+  joinedAt: Date
 }
 
 export interface Expense {
@@ -12,18 +24,8 @@ export interface Expense {
   amount: number
   paidBy: string
   splitBetween: string[]
-  date: string
+  date: Date
   category?: string
-}
-
-export interface Group {
-  id: string
-  name: string
-  description?: string
-  members: Member[]
-  expenses: Expense[]
-  createdAt: string
-  inviteCode: string
 }
 
 const GROUPS_STORAGE_KEY = "amigo-gastos-groups"
@@ -52,22 +54,17 @@ function saveGroups(groups: Group[]): void {
   }
 }
 
-// Función para obtener un grupo por ID
-export function getGroup(id: string): Group | null {
-  const groups = getGroups()
-  return groups.find((group) => group.id === id) || null
-}
-
-// Función para crear un nuevo grupo
-export function createGroup(name: string, description?: string): Group {
+// Función para crear un grupo
+export function createGroup(name: string, description: string, createdBy: string): Group {
   const newGroup: Group = {
-    id: Date.now().toString(),
+    id: generateId(),
     name,
     description,
     members: [],
     expenses: [],
-    createdAt: new Date().toISOString(),
-    inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
+    inviteCode: generateInviteCode(),
+    createdAt: new Date(),
+    createdBy,
   }
 
   const groups = getGroups()
@@ -77,39 +74,10 @@ export function createGroup(name: string, description?: string): Group {
   return newGroup
 }
 
-// Función para agregar un miembro a un grupo
-export function addMemberToGroup(groupId: string, member: Member): boolean {
+// Función para obtener un grupo por ID
+export function getGroupById(id: string): Group | null {
   const groups = getGroups()
-  const groupIndex = groups.findIndex((group) => group.id === groupId)
-
-  if (groupIndex === -1) return false
-
-  // Verificar si el miembro ya existe
-  const memberExists = groups[groupIndex].members.some((m) => m.id === member.id)
-  if (memberExists) return false
-
-  groups[groupIndex].members.push(member)
-  saveGroups(groups)
-
-  return true
-}
-
-// Función para agregar un gasto a un grupo
-export function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id">): boolean {
-  const groups = getGroups()
-  const groupIndex = groups.findIndex((group) => group.id === groupId)
-
-  if (groupIndex === -1) return false
-
-  const newExpense: Expense = {
-    ...expense,
-    id: Date.now().toString(),
-  }
-
-  groups[groupIndex].expenses.push(newExpense)
-  saveGroups(groups)
-
-  return true
+  return groups.find((group) => group.id === id) || null
 }
 
 // Función para obtener un grupo por código de invitación
@@ -118,50 +86,54 @@ export function getGroupByInviteCode(inviteCode: string): Group | null {
   return groups.find((group) => group.inviteCode === inviteCode) || null
 }
 
-// Función para calcular deudas
-export function calculateDebts(group: Group): Array<{ from: string; to: string; amount: number }> {
-  const balances: Record<string, number> = {}
+// Función para agregar un miembro a un grupo
+export function addMemberToGroup(groupId: string, member: Omit<GroupMember, "joinedAt">): boolean {
+  const groups = getGroups()
+  const groupIndex = groups.findIndex((group) => group.id === groupId)
 
-  // Inicializar balances
-  group.members.forEach((member) => {
-    balances[member.id] = 0
-  })
+  if (groupIndex === -1) return false
 
-  // Calcular balances basado en gastos
-  group.expenses.forEach((expense) => {
-    const splitAmount = expense.amount / expense.splitBetween.length
+  const newMember: GroupMember = {
+    ...member,
+    joinedAt: new Date(),
+  }
 
-    // El que pagó recibe crédito
-    balances[expense.paidBy] += expense.amount
+  groups[groupIndex].members.push(newMember)
+  saveGroups(groups)
 
-    // Los que deben pagar pierden crédito
-    expense.splitBetween.forEach((memberId) => {
-      balances[memberId] -= splitAmount
-    })
-  })
+  return true
+}
 
-  // Calcular deudas
-  const debts: Array<{ from: string; to: string; amount: number }> = []
-  const creditors = Object.entries(balances).filter(([, balance]) => balance > 0)
-  const debtors = Object.entries(balances).filter(([, balance]) => balance < 0)
+// Función para agregar un gasto
+export function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id" | "date">): boolean {
+  const groups = getGroups()
+  const groupIndex = groups.findIndex((group) => group.id === groupId)
 
-  creditors.forEach(([creditorId, creditAmount]) => {
-    debtors.forEach(([debtorId, debtAmount]) => {
-      if (Math.abs(debtAmount) > 0.01 && creditAmount > 0.01) {
-        const transferAmount = Math.min(creditAmount, Math.abs(debtAmount))
+  if (groupIndex === -1) return false
 
-        debts.push({
-          from: debtorId,
-          to: creditorId,
-          amount: transferAmount,
-        })
+  const newExpense: Expense = {
+    ...expense,
+    id: generateId(),
+    date: new Date(),
+  }
 
-        // Actualizar balances
-        balances[creditorId] -= transferAmount
-        balances[debtorId] += transferAmount
-      }
-    })
-  })
+  groups[groupIndex].expenses.push(newExpense)
+  saveGroups(groups)
 
-  return debts.filter((debt) => debt.amount > 0.01)
+  return true
+}
+
+// Función para generar ID único
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+}
+
+// Función para generar código de invitación
+function generateInviteCode(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  let result = ""
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
 }
