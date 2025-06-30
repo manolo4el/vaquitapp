@@ -21,7 +21,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     console.log("AuthProvider: Inicializando...")
 
-    // ✅ Intentar cargar usuario inmediatamente desde localStorage
+    // Solo ejecutar en el cliente
+    if (typeof window === "undefined") {
+      setIsLoading(false)
+      return
+    }
+
+    // Intentar cargar usuario inmediatamente desde localStorage
     const savedUser = getCurrentUser()
     if (savedUser) {
       console.log("AuthProvider: Usuario encontrado en localStorage")
@@ -29,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false)
     }
 
-    // ✅ Luego verificar con Firebase
+    // Luego verificar con Firebase
     initializeAuth()
       .then((authenticatedUser) => {
         console.log("AuthProvider: Firebase auth completado:", authenticatedUser ? authenticatedUser.name : "No user")

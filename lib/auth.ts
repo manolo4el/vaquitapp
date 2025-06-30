@@ -3,7 +3,7 @@ import { auth, googleProvider } from "./firebase"
 
 // Sistema de autenticación con Firebase
 export interface User {
-  id: string // Cambiar de number a string para Firebase UID
+  id: string
   name: string
   email: string
   avatar?: string
@@ -20,17 +20,19 @@ let authInitialized = false
 // Convertir Firebase User a nuestro User interface
 function firebaseUserToUser(firebaseUser: FirebaseUser): User {
   // Buscar datos adicionales del perfil guardados localmente
-  const savedProfile = localStorage.getItem(USER_PROFILE_KEY)
   let additionalData = { alias: "" }
 
-  if (savedProfile) {
-    try {
-      const parsed = JSON.parse(savedProfile)
-      if (parsed.id === firebaseUser.uid) {
-        additionalData = parsed
+  if (typeof window !== "undefined") {
+    const savedProfile = localStorage.getItem(USER_PROFILE_KEY)
+    if (savedProfile) {
+      try {
+        const parsed = JSON.parse(savedProfile)
+        if (parsed.id === firebaseUser.uid) {
+          additionalData = parsed
+        }
+      } catch (error) {
+        console.error("Error parsing saved profile:", error)
       }
-    } catch (error) {
-      console.error("Error parsing saved profile:", error)
     }
   }
 
@@ -42,21 +44,28 @@ function firebaseUserToUser(firebaseUser: FirebaseUser): User {
     alias: additionalData.alias || "",
   }
 
-  // ✅ Guardar estado de autenticación en localStorage
-  localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(user))
+  // Guardar estado de autenticación en localStorage
+  if (typeof window !== "undefined") {
+    localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(user))
+  }
   console.log("Usuario autenticado y guardado:", user)
 
   return user
 }
 
 export function getCurrentUser(): User | null {
-  // ✅ Si ya tenemos el usuario en memoria, devolverlo
+  // Si ya tenemos el usuario en memoria, devolverlo
   if (currentUser) {
     console.log("Usuario desde memoria:", currentUser)
     return currentUser
   }
 
-  // ✅ Intentar cargar desde localStorage como fallback
+  // Solo acceder a localStorage en el cliente
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  // Intentar cargar desde localStorage como fallback
   try {
     const savedAuth = localStorage.getItem(AUTH_STATE_KEY)
     if (savedAuth) {
@@ -80,8 +89,10 @@ export function updateUserProfile(updates: Partial<User>): User | null {
   currentUser = updatedUser
 
   // Guardar datos adicionales del perfil localmente
-  localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedUser))
-  localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(updatedUser))
+  if (typeof window !== "undefined") {
+    localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedUser))
+    localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(updatedUser))
+  }
 
   console.log("Perfil de usuario actualizado:", updatedUser)
   return updatedUser
@@ -94,10 +105,16 @@ export function isLoggedIn(): boolean {
   return isLogged
 }
 
-// ✅ Mejorar inicialización de autenticación
+// Mejorar inicialización de autenticación
 export function initializeAuth(): Promise<User | null> {
   return new Promise((resolve, reject) => {
     console.log("Inicializando autenticación...")
+
+    // Solo ejecutar en el cliente
+    if (typeof window === "undefined") {
+      resolve(null)
+      return
+    }
 
     // Si ya está inicializado, devolver el usuario actual
     if (authInitialized) {
@@ -106,49 +123,57 @@ export function initializeAuth(): Promise<User | null> {
       return
     }
 
-    // ✅ Verificar primero si hay un usuario en localStorage
+    // Verificar primero si hay un usuario en localStorage
     const savedUser = getCurrentUser()
     if (savedUser) {
       console.log("Usuario encontrado en localStorage, verificando con Firebase...")
     }
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (firebaseUser) => {
-        console.log("Estado de autenticación de Firebase:", firebaseUser ? firebaseUser.email : "No user")
+    try {
+      const unsubscribe = onAuthStateChanged(
+        auth,
+        (firebaseUser) => {
+          console.log("Estado de autenticación de Firebase:", firebaseUser ? firebaseUser.email : "No user")
 
-        if (firebaseUser) {
-          currentUser = firebaseUserToUser(firebaseUser)
+          if (firebaseUser) {
+            currentUser = firebaseUserToUser(firebaseUser)
+            authInitialized = true
+            console.log("Usuario autenticado exitosamente:", currentUser)
+            resolve(currentUser)
+          } else {
+            // Si Firebase dice que no hay usuario, limpiar localStorage
+            currentUser = null
+            if (typeof window !== "undefined") {
+              localStorage.removeItem(AUTH_STATE_KEY)
+              localStorage.removeItem(USER_PROFILE_KEY)
+            }
+            authInitialized = true
+            console.log("No hay usuario autenticado en Firebase")
+            resolve(null)
+          }
+          unsubscribe()
+        },
+        (error) => {
+          console.error("Error en onAuthStateChanged:", error)
           authInitialized = true
-          console.log("Usuario autenticado exitosamente:", currentUser)
-          resolve(currentUser)
-        } else {
-          // ✅ Si Firebase dice que no hay usuario, limpiar localStorage
-          currentUser = null
-          localStorage.removeItem(AUTH_STATE_KEY)
-          localStorage.removeItem(USER_PROFILE_KEY)
+          reject(error)
+        },
+      )
+
+      // Timeout de seguridad
+      setTimeout(() => {
+        if (!authInitialized) {
+          console.warn("Timeout en inicialización de auth, usando localStorage")
+          unsubscribe()
           authInitialized = true
-          console.log("No hay usuario autenticado en Firebase")
-          resolve(null)
+          resolve(getCurrentUser())
         }
-        unsubscribe()
-      },
-      (error) => {
-        console.error("Error en onAuthStateChanged:", error)
-        authInitialized = true
-        reject(error)
-      },
-    )
-
-    // ✅ Timeout de seguridad
-    setTimeout(() => {
-      if (!authInitialized) {
-        console.warn("Timeout en inicialización de auth, usando localStorage")
-        unsubscribe()
-        authInitialized = true
-        resolve(getCurrentUser())
-      }
-    }, 5000)
+      }, 5000)
+    } catch (error) {
+      console.error("Error al inicializar Firebase Auth:", error)
+      authInitialized = true
+      resolve(getCurrentUser()) // Usar localStorage como fallback
+    }
   })
 }
 
@@ -156,6 +181,11 @@ export function initializeAuth(): Promise<User | null> {
 export async function loginWithGoogle(): Promise<User> {
   try {
     console.log("Iniciando login con Google...")
+
+    // Verificar que estamos en el cliente
+    if (typeof window === "undefined") {
+      throw new Error("Login solo disponible en el cliente")
+    }
 
     // Verificar que Firebase esté inicializado
     if (!auth) {
@@ -197,11 +227,15 @@ export async function loginWithGoogle(): Promise<User> {
 // Logout
 export async function logout(): Promise<void> {
   try {
-    await signOut(auth)
+    if (typeof window !== "undefined") {
+      await signOut(auth)
+    }
     currentUser = null
     authInitialized = false
-    localStorage.removeItem(USER_PROFILE_KEY)
-    localStorage.removeItem(AUTH_STATE_KEY)
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(USER_PROFILE_KEY)
+      localStorage.removeItem(AUTH_STATE_KEY)
+    }
     console.log("Logout exitoso")
   } catch (error) {
     console.error("Error en logout:", error)

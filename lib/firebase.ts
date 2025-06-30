@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app"
+import { initializeApp, getApps, getApp } from "firebase/app"
 import { getAuth, GoogleAuthProvider } from "firebase/auth"
 
 // Configuración de Firebase
@@ -11,8 +11,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:163528661432:web:8f9a1b2c3d4e5f6g7h8i9j0k",
 }
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig)
+// Initialize Firebase - evitar múltiples inicializaciones
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
 
 // Initialize Firebase Auth and get a reference to the service
 export const auth = getAuth(app)
