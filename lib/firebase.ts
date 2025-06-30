@@ -1,25 +1,52 @@
 import { initializeApp, getApps, getApp } from "firebase/app"
 import { getAuth, GoogleAuthProvider } from "firebase/auth"
 
-// Configuración de Firebase
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyCaWsgwyBmvlm266WnloJV6etlQr7igSgs",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "divisor-gastos-42acd.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "divisor-gastos-42acd",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "divisor-gastos-42acd.appspot.com",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "163528661432",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:163528661432:web:8f9a1b2c3d4e5f6g7h8i9j0k",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-// Initialize Firebase - evitar múltiples inicializaciones
+// Verificar que las variables de entorno estén configuradas
+const requiredEnvVars = [
+  "NEXT_PUBLIC_FIREBASE_API_KEY",
+  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+  "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+  "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
+  "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+  "NEXT_PUBLIC_FIREBASE_APP_ID",
+]
+
+const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar])
+
+if (missingEnvVars.length > 0) {
+  console.error("Missing Firebase environment variables:", missingEnvVars)
+}
+
+// Inicializar Firebase solo una vez
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
 
-// Initialize Firebase Auth and get a reference to the service
-export const auth = getAuth(app)
+// Inicializar Auth solo en el cliente
+let auth: any = null
+let googleProvider: GoogleAuthProvider | null = null
 
-// Initialize Google Auth Provider
-export const googleProvider = new GoogleAuthProvider()
-googleProvider.addScope("email")
-googleProvider.addScope("profile")
+if (typeof window !== "undefined") {
+  try {
+    auth = getAuth(app)
+    googleProvider = new GoogleAuthProvider()
 
+    // Configurar el proveedor de Google
+    googleProvider.addScope("email")
+    googleProvider.addScope("profile")
+
+    console.log("Firebase Auth inicializado correctamente")
+  } catch (error) {
+    console.error("Error al inicializar Firebase Auth:", error)
+  }
+}
+
+export { auth, googleProvider }
 export default app

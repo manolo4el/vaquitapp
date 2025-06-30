@@ -7,14 +7,9 @@ import { AuthProvider } from "@/hooks/use-auth"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Vaquitapp - Divide gastos fácil y justo",
-  description: "La forma más simple de manejar gastos compartidos con tus amigos",
-  icons: {
-    icon: "/vaquitapp-icon.svg",
-    shortcut: "/vaquitapp-icon.svg",
-    apple: "/vaquitapp-icon.svg",
-  },
-  generator: 'VaquitApp'
+  title: "Vaquitapp - Gastos Compartidos",
+  description: "Divide gastos fácilmente con tus amigos",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -24,10 +19,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <head>
-        <link rel="icon" href="/vaquitapp-icon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/vaquitapp-icon.svg" />
-      </head>
       <body className={inter.className}>
         <AuthProvider>{children}</AuthProvider>
       </body>

@@ -1,139 +1,213 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { VaquitappLogo } from "@/components/vaquitapp-logo"
-import { loginWithGoogle, getPendingInvite, clearPendingInvite } from "@/lib/auth"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ArrowRight, Users, Calculator, TrendingUp, Smartphone } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { Loader2 } from "lucide-react"
+import { useEffect } from "react"
+import { VaquitappLogo } from "@/components/vaquitapp-logo"
 
 export default function HomePage() {
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { user, isLoading } = useAuth()
-  const router = useRouter()
+  const { isAuthenticated, isLoading } = useAuth()
 
   useEffect(() => {
-    // Solo ejecutar en el cliente
-    if (typeof window === "undefined") return
-
-    if (user && !isLoading) {
-      console.log("Usuario autenticado, redirigiendo al dashboard")
-
-      // Verificar si hay una invitación pendiente
-      const pendingInvite = getPendingInvite()
-      if (pendingInvite) {
-        console.log("Invitación pendiente encontrada:", pendingInvite)
-        clearPendingInvite()
-        router.push(`/invite/${pendingInvite}`)
-      } else {
-        router.push("/dashboard")
-      }
+    // Si ya está autenticado, redirigir al dashboard
+    if (!isLoading && isAuthenticated) {
+      window.location.href = "/dashboard"
     }
-  }, [user, isLoading, router])
+  }, [isAuthenticated, isLoading])
 
-  const handleGoogleLogin = async () => {
-    if (typeof window === "undefined") return
-
-    setIsLoggingIn(true)
-    setError(null)
-
-    try {
-      console.log("Iniciando proceso de login...")
-      await loginWithGoogle()
-      console.log("Login completado exitosamente")
-
-      // La redirección se manejará en el useEffect
-    } catch (error: any) {
-      console.error("Error en login:", error)
-      setError(error.message || "Error al iniciar sesión")
-    } finally {
-      setIsLoggingIn(false)
-    }
+  const handleGetStarted = () => {
+    window.location.href = "/login"
   }
 
-  // Mostrar loading mientras se inicializa la autenticación
+  const handleLogin = () => {
+    window.location.href = "/login"
+  }
+
+  // Mostrar loading mientras se verifica la autenticación
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      <div className="min-h-screen bg-gradient-to-br from-lime-50 via-violet-50 to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-lime-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Cargando...</p>
         </div>
       </div>
     )
   }
 
-  // Si el usuario está autenticado, mostrar loading mientras redirige
-  if (user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-gray-600">Redirigiendo...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <VaquitappLogo className="h-16 w-16" />
-          </div>
-          <CardTitle className="text-2xl font-bold text-gray-900">Bienvenido a VaquitApp</CardTitle>
-          <CardDescription className="text-gray-600">
-            La forma más simple de manejar gastos compartidos con tus amigos
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">{error}</div>}
+    <div className="min-h-screen bg-gradient-to-br from-lime-50 via-violet-50 to-orange-50 relative overflow-hidden">
+      {/* Elementos decorativos de fondo */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-lime-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-violet-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
+        <div className="absolute top-40 left-40 w-80 h-80 bg-orange-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
+      </div>
 
-          <Button
-            onClick={handleGoogleLogin}
-            disabled={isLoggingIn}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-            size="lg"
-          >
-            {isLoggingIn ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Iniciando sesión...
-              </>
-            ) : (
-              <>
-                <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                  <path
-                    fill="currentColor"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                Continuar con Google
-              </>
-            )}
-          </Button>
-
-          <div className="text-center text-sm text-gray-500">
-            Al continuar, aceptas nuestros términos de servicio y política de privacidad
+      {/* Header */}
+      <header className="relative z-10 bg-white/80 backdrop-blur-sm border-b border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <VaquitappLogo size="md" showText={true} />
+            <Button
+              onClick={handleLogin}
+              variant="outline"
+              className="bg-white/50 hover:bg-white/80 border-lime-300 text-lime-700 hover:text-lime-800"
+            >
+              Iniciar Sesión
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </header>
+
+      {/* Contenido principal */}
+      <main className="relative z-10 max-w-6xl mx-auto px-4 py-16">
+        {/* Hero Section */}
+        <div className="text-center mb-16">
+          <div className="mb-8">
+            <VaquitappLogo size="xl" showText={false} />
+          </div>
+
+          <h1 className="text-5xl md:text-6xl font-bold text-gray-800 mb-6 leading-tight">
+            Divide gastos
+            <br />
+            <span className="bg-gradient-to-r from-lime-500 to-violet-500 bg-clip-text text-transparent">
+              sin complicaciones
+            </span>
+          </h1>
+
+          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
+            La forma más fácil de dividir gastos con amigos, familia o compañeros. Crea grupos, agrega gastos y deja que
+            nosotros calculemos quién debe qué.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Button
+              onClick={handleGetStarted}
+              className="bg-gradient-to-r from-lime-500 to-lime-600 hover:from-lime-600 hover:to-lime-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 py-6 px-8 text-lg font-medium rounded-xl"
+            >
+              <ArrowRight className="w-5 h-5 mr-2" />
+              Comenzar gratis
+            </Button>
+
+            <p className="text-sm text-gray-500">No se requiere tarjeta de crédito</p>
+          </div>
+        </div>
+
+        {/* Features Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          <Card className="bg-white/70 backdrop-blur-sm border-0 hover:bg-white/90 transition-all duration-200 hover:shadow-lg">
+            <CardHeader className="text-center">
+              <div className="bg-lime-100 p-3 rounded-full w-fit mx-auto mb-4">
+                <Users className="w-6 h-6 text-lime-600" />
+              </div>
+              <CardTitle className="text-lg">Grupos Fáciles</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 text-center">
+                Crea grupos en segundos e invita a tus amigos con un simple link
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/70 backdrop-blur-sm border-0 hover:bg-white/90 transition-all duration-200 hover:shadow-lg">
+            <CardHeader className="text-center">
+              <div className="bg-violet-100 p-3 rounded-full w-fit mx-auto mb-4">
+                <Calculator className="w-6 h-6 text-violet-600" />
+              </div>
+              <CardTitle className="text-lg">Cálculo Automático</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 text-center">
+                Algoritmos inteligentes calculan la forma más eficiente de saldar deudas
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/70 backdrop-blur-sm border-0 hover:bg-white/90 transition-all duration-200 hover:shadow-lg">
+            <CardHeader className="text-center">
+              <div className="bg-orange-100 p-3 rounded-full w-fit mx-auto mb-4">
+                <TrendingUp className="w-6 h-6 text-orange-600" />
+              </div>
+              <CardTitle className="text-lg">Seguimiento Real</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 text-center">Ve en tiempo real quién debe qué y mantén todo organizado</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/70 backdrop-blur-sm border-0 hover:bg-white/90 transition-all duration-200 hover:shadow-lg">
+            <CardHeader className="text-center">
+              <div className="bg-lime-100 p-3 rounded-full w-fit mx-auto mb-4">
+                <Smartphone className="w-6 h-6 text-lime-600" />
+              </div>
+              <CardTitle className="text-lg">100% Móvil</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 text-center">
+                Funciona perfectamente en cualquier dispositivo, donde sea que estés
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* CTA Section */}
+        <div className="text-center">
+          <Card className="bg-gradient-to-r from-lime-50 to-violet-50 border-lime-200 max-w-2xl mx-auto">
+            <CardContent className="p-8">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">¿Listo para simplificar tus gastos compartidos?</h2>
+              <p className="text-gray-600 mb-6">
+                Únete a miles de usuarios que ya dividen sus gastos de forma inteligente
+              </p>
+              <Button
+                onClick={handleGetStarted}
+                className="bg-gradient-to-r from-lime-500 to-violet-500 hover:from-lime-600 hover:to-violet-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 py-6 px-8 text-lg font-medium rounded-xl"
+              >
+                <ArrowRight className="w-5 h-5 mr-2" />
+                Empezar ahora
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="relative z-10 bg-white/80 backdrop-blur-sm border-t border-gray-200 mt-16">
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <div className="text-center">
+            <VaquitappLogo size="sm" showText={true} />
+            <p className="text-gray-500 mt-4">© 2024 Vaquitapp. Hecho con ❤️ para simplificar tus gastos compartidos.</p>
+          </div>
+        </div>
+      </footer>
+
+      <style jsx>{`
+        @keyframes blob {
+          0% {
+            transform: translate(0px, 0px) scale(1);
+          }
+          33% {
+            transform: translate(30px, -50px) scale(1.1);
+          }
+          66% {
+            transform: translate(-20px, 20px) scale(0.9);
+          }
+          100% {
+            transform: translate(0px, 0px) scale(1);
+          }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+      `}</style>
     </div>
   )
 }
