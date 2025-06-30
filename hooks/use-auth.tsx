@@ -29,21 +29,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
     } catch (error) {
       console.error("Error al cerrar sesión:", error)
+      // Limpiar usuario local aunque haya error
+      setUser(null)
       throw error
     }
   }
 
   useEffect(() => {
-    // Verificar usuario inicial
+    // Verificar usuario inicial desde localStorage
     const currentUser = getCurrentUser()
     setUser(currentUser)
     setIsLoading(false)
 
-    // Configurar listener de cambios de autenticación
+    // Configurar listener de cambios de autenticación solo en el cliente
     let unsubscribe: (() => void) | null = null
 
     const setupAuthListener = async () => {
       try {
+        // Esperar un poco para asegurar que Firebase esté listo
+        await new Promise((resolve) => setTimeout(resolve, 100))
+
         const { onAuthChange } = await import("@/lib/auth")
         unsubscribe = onAuthChange((user) => {
           setUser(user)
@@ -55,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Solo configurar el listener en el cliente
+    // Solo configurar el listener en el cliente y después de un pequeño delay
     if (typeof window !== "undefined") {
       setupAuthListener()
     }

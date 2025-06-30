@@ -1,5 +1,5 @@
 import { signInWithPopup, signOut, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
-import { getFirebaseAuth, getGoogleProvider } from "./firebase"
+import { initializeFirebaseAuth } from "./firebase"
 
 export interface User {
   id: string
@@ -68,8 +68,11 @@ export async function loginWithGoogle(): Promise<User> {
   try {
     console.log("Iniciando login con Google...")
 
-    const auth = getFirebaseAuth()
-    const googleProvider = getGoogleProvider()
+    const { auth, googleProvider } = initializeFirebaseAuth()
+
+    if (!auth || !googleProvider) {
+      throw new Error("Firebase Auth no está disponible")
+    }
 
     const result = await signInWithPopup(auth, googleProvider)
     const firebaseUser = result.user
@@ -110,12 +113,18 @@ export async function logout(): Promise<void> {
   }
 
   try {
-    const auth = getFirebaseAuth()
-    await signOut(auth)
+    const { auth } = initializeFirebaseAuth()
+
+    if (auth) {
+      await signOut(auth)
+    }
+
     clearUser()
     console.log("Logout exitoso")
   } catch (error: any) {
     console.error("Error en logout:", error)
+    // Limpiar usuario aunque haya error en Firebase
+    clearUser()
     throw new Error(error.message || "Error al cerrar sesión")
   }
 }
@@ -128,7 +137,13 @@ export function onAuthChange(callback: (user: User | null) => void): () => void 
   }
 
   try {
-    const auth = getFirebaseAuth()
+    const { auth } = initializeFirebaseAuth()
+
+    if (!auth) {
+      console.warn("Firebase Auth no disponible para listener")
+      return () => {}
+    }
+
     return onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         const user = mapFirebaseUser(firebaseUser)
