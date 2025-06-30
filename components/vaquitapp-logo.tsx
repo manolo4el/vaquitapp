@@ -6,51 +6,58 @@ interface VaquitappLogoProps {
   className?: string
 }
 
-export function VaquitappLogo({ size = "md", showText = true, className }: VaquitappLogoProps) {
-  const sizeClasses = {
-    sm: "w-6 h-6",
-    md: "w-8 h-8",
-    lg: "w-12 h-12",
-    xl: "w-16 h-16",
-  }
+const sizeClasses = {
+  sm: "h-8 w-8",
+  md: "h-12 w-12",
+  lg: "h-16 w-16",
+  xl: "h-24 w-24",
+}
 
-  const textSizeClasses = {
-    sm: "text-lg",
-    md: "text-xl",
-    lg: "text-2xl",
-    xl: "text-3xl",
-  }
+const textSizeClasses = {
+  sm: "text-lg",
+  md: "text-xl",
+  lg: "text-2xl",
+  xl: "text-3xl",
+}
 
+export function VaquitappLogo({ size = "md", showText = false, className }: VaquitappLogoProps) {
   return (
-    <div className={cn("flex items-center space-x-2", className)}>
-      {/* Logo Icon */}
-      <div
-        className={cn(
-          "rounded-full bg-gradient-to-br from-lime-400 to-violet-500 flex items-center justify-center",
-          sizeClasses[size],
-        )}
-      >
-        <svg viewBox="0 0 24 24" fill="none" className="w-1/2 h-1/2 text-white" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="currentColor" />
-          <path
-            d="M12 16L13.09 22.26L20 23L13.09 23.74L12 30L10.91 23.74L4 23L10.91 22.26L12 16Z"
-            fill="currentColor"
-            opacity="0.6"
-          />
+    <div className={cn("flex items-center gap-3", className)}>
+      <div className={cn("relative", sizeClasses[size])}>
+        <svg viewBox="0 0 100 100" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Fondo circular con gradiente */}
+          <defs>
+            <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#84cc16" />
+              <stop offset="50%" stopColor="#8b5cf6" />
+              <stop offset="100%" stopColor="#f97316" />
+            </linearGradient>
+          </defs>
+
+          {/* Círculo de fondo */}
+          <circle cx="50" cy="50" r="45" fill="url(#logoGradient)" />
+
+          {/* Símbolo de dinero estilizado */}
+          <g fill="white">
+            {/* Símbolo $ */}
+            <path
+              d="M45 20 L45 25 M45 75 L45 80 M35 30 Q35 25 40 25 L55 25 Q60 25 60 30 Q60 35 55 35 L40 35 Q35 35 35 40 Q35 45 40 45 L55 45 Q60 45 60 50 Q60 55 55 55 L40 55 Q35 55 35 60 Q35 65 40 65 L55 65 Q60 65 60 70"
+              stroke="white"
+              strokeWidth="4"
+              fill="none"
+              strokeLinecap="round"
+            />
+
+            {/* Puntos decorativos */}
+            <circle cx="25" cy="35" r="3" />
+            <circle cx="75" cy="35" r="3" />
+            <circle cx="25" cy="65" r="3" />
+            <circle cx="75" cy="65" r="3" />
+          </g>
         </svg>
       </div>
 
-      {/* Logo Text */}
-      {showText && (
-        <span
-          className={cn(
-            "font-bold bg-gradient-to-r from-lime-600 to-violet-600 bg-clip-text text-transparent",
-            textSizeClasses[size],
-          )}
-        >
-          Vaquitapp
-        </span>
-      )}
+      {showText && <span className={cn("font-bold text-gray-800", textSizeClasses[size])}>Vaquitapp</span>}
     </div>
   )
 }

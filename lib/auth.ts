@@ -1,5 +1,5 @@
 import { signInWithPopup, signOut, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
-import { auth, googleProvider } from "./firebase"
+import { getFirebaseAuth, getGoogleProvider } from "./firebase"
 
 export interface User {
   id: string
@@ -9,7 +9,7 @@ export interface User {
   alias?: string
 }
 
-// Clave para localStorage
+// Claves para localStorage
 const USER_STORAGE_KEY = "amigo-gastos-user"
 const PENDING_INVITE_KEY = "amigo-gastos-pending-invite"
 
@@ -61,12 +61,15 @@ function clearUser(): void {
 
 // Login con Google
 export async function loginWithGoogle(): Promise<User> {
-  if (!auth || !googleProvider) {
-    throw new Error("Firebase Auth no está inicializado")
+  if (typeof window === "undefined") {
+    throw new Error("Login solo disponible en el cliente")
   }
 
   try {
     console.log("Iniciando login con Google...")
+
+    const auth = getFirebaseAuth()
+    const googleProvider = getGoogleProvider()
 
     const result = await signInWithPopup(auth, googleProvider)
     const firebaseUser = result.user
@@ -102,11 +105,12 @@ export async function loginWithGoogle(): Promise<User> {
 
 // Logout
 export async function logout(): Promise<void> {
-  if (!auth) {
-    throw new Error("Firebase Auth no está inicializado")
+  if (typeof window === "undefined") {
+    throw new Error("Logout solo disponible en el cliente")
   }
 
   try {
+    const auth = getFirebaseAuth()
     await signOut(auth)
     clearUser()
     console.log("Logout exitoso")
@@ -118,21 +122,27 @@ export async function logout(): Promise<void> {
 
 // Listener de cambios de autenticación
 export function onAuthChange(callback: (user: User | null) => void): () => void {
-  if (!auth) {
-    console.warn("Firebase Auth no está inicializado")
+  if (typeof window === "undefined") {
+    console.warn("onAuthChange solo disponible en el cliente")
     return () => {}
   }
 
-  return onAuthStateChanged(auth, (firebaseUser) => {
-    if (firebaseUser) {
-      const user = mapFirebaseUser(firebaseUser)
-      saveUser(user)
-      callback(user)
-    } else {
-      clearUser()
-      callback(null)
-    }
-  })
+  try {
+    const auth = getFirebaseAuth()
+    return onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const user = mapFirebaseUser(firebaseUser)
+        saveUser(user)
+        callback(user)
+      } else {
+        clearUser()
+        callback(null)
+      }
+    })
+  } catch (error) {
+    console.error("Error al configurar listener de auth:", error)
+    return () => {}
+  }
 }
 
 // Funciones para manejar invitaciones pendientes
