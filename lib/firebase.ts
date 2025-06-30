@@ -1,6 +1,5 @@
-import { initializeApp, getApps, type FirebaseApp, getApp } from "firebase/app"
+import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
 import { getAuth, type Auth } from "firebase/auth"
-import { getFirestore } from "firebase/firestore"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,9 +10,21 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-// Initialize Firebase only if it hasn't been initialized
-const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
+// Initialize Firebase only once
+let app: FirebaseApp
+let auth: Auth
 
-export const auth: Auth = getAuth(app)
-export const db = getFirestore(app)
+if (typeof window !== "undefined") {
+  // Only initialize on client side
+  if (getApps().length === 0) {
+    app = initializeApp(firebaseConfig)
+  } else {
+    app = getApps()[0]
+  }
+
+  // Initialize auth after app is ready
+  auth = getAuth(app)
+}
+
+export { app, auth }
 export default app

@@ -1,12 +1,10 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { type User, onAuthStateChanged } from "firebase/auth"
-import { auth } from "@/lib/firebase"
-import { loginWithGoogle, signOut as authSignOut } from "@/lib/auth"
+import { onAuthChange, loginWithGoogle, signOut, getCurrentUser, type AuthUser } from "@/lib/auth"
 
 interface AuthContextType {
-  user: User | null
+  user: AuthUser | null
   loading: boolean
   signIn: () => Promise<void>
   signOut: () => Promise<void>
@@ -15,30 +13,48 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user)
+    // Check for existing user immediately
+    const currentUser = getCurrentUser()
+    if (currentUser) {
+      setUser(currentUser)
+      setLoading(false)
+    }
+
+    // Set up auth state listener
+    const unsubscribe = onAuthChange((authUser) => {
+      setUser(authUser)
       setLoading(false)
     })
 
-    return () => unsubscribe()
+    // Fallback to stop loading after 1 second
+    const fallbackTimer = setTimeout(() => {
+      setLoading(false)
+    }, 1000)
+
+    return () => {
+      unsubscribe()
+      clearTimeout(fallbackTimer)
+    }
   }, [])
 
   const signIn = async () => {
     try {
-      await loginWithGoogle()
+      const authUser = await loginWithGoogle()
+      setUser(authUser)
     } catch (error) {
       console.error("Error signing in:", error)
       throw error
     }
   }
 
-  const signOut = async () => {
+  const handleSignOut = async () => {
     try {
-      await authSignOut()
+      await signOut()
+      setUser(null)
     } catch (error) {
       console.error("Error signing out:", error)
       throw error
@@ -49,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     loading,
     signIn,
-    signOut,
+    signOut: handleSignOut,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
