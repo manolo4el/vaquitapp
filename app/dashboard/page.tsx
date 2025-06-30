@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Plus, TrendingUp, TrendingDown, CheckCircle, Calendar, Users, LogOut, User } from "lucide-react"
 import { getUserBalance, formatAmount } from "@/lib/expense-calculator"
-import { getUserGroupsFirestore } from "@/lib/group-firestore"
+import { getUserGroups } from "@/lib/group-storage" // ✅ Usar función específica para usuario
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { AuthGuard } from "@/components/auth-guard"
@@ -14,7 +14,6 @@ import { VaquitappLogo } from "@/components/vaquitapp-logo"
 import { getConsolidatedDebts, formatDebtsForModal, formatCreditsForModal } from "@/lib/debt-calculator"
 import DebtsOwedModal from "@/components/debts-owed-modal"
 import DebtsOweModal from "@/components/debts-owe-modal"
-import { migrateLocalGroupsToFirestore } from "@/lib/group-firestore"
 
 export default function DashboardPage() {
   const [groups, setGroups] = useState<any[]>([])
@@ -30,23 +29,11 @@ export default function DashboardPage() {
     loadDashboardData()
   }, [user])
 
-  useEffect(() => {
-    // Migrar grupos locales a Firestore automáticamente
-    if (typeof window !== "undefined") {
-      const localGroups = localStorage.getItem("amigo-gastos-groups")
-      if (localGroups && JSON.parse(localGroups).length > 0) {
-        migrateLocalGroupsToFirestore().then(() => {
-          console.log("Migración de grupos locales a Firestore completada.")
-        })
-      }
-    }
-  }, [])
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = () => {
     try {
-      // Cargar grupos del usuario actual desde Firestore
-      const userGroups = await getUserGroupsFirestore(user!.id)
-      console.log("Grupos del usuario cargados desde Firestore:", userGroups)
+      // ✅ Cargar solo grupos del usuario actual (sin datos mock)
+      const userGroups = getUserGroups() // Función que filtra por usuario actual
+      console.log("Grupos del usuario cargados:", userGroups)
 
       // Calcular balances para cada grupo
       const groupsWithBalances = userGroups.map((group) => {
@@ -68,11 +55,12 @@ export default function DashboardPage() {
 
       setGroups(groupsWithBalances)
 
-      // (Opcional) Calcular deudas consolidadas si tienes lógica en Firestore
-      // const consolidated = getConsolidatedDebts()
-      // setConsolidatedData(consolidated)
+      // ✅ Calcular deudas consolidadas
+      const consolidated = getConsolidatedDebts()
+      console.log("Deudas consolidadas:", consolidated)
+      setConsolidatedData(consolidated)
     } catch (error) {
-      console.error("Error al cargar grupos desde Firestore:", error)
+      console.error("Error al cargar grupos:", error)
     } finally {
       setIsLoading(false)
     }

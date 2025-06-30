@@ -22,7 +22,7 @@ export interface Transfer {
 }
 
 export interface Member {
-  id: string // Compatible con Firestore UID
+  id: string // Cambiar a string para Firebase UIDs
   name: string
   avatar?: string
   alias?: string

@@ -1,6 +1,5 @@
 import { initializeApp } from "firebase/app"
 import { getAuth, GoogleAuthProvider } from "firebase/auth"
-import { getFirestore } from "firebase/firestore"
 
 // Configuración de Firebase
 const firebaseConfig = {
@@ -22,8 +21,5 @@ export const auth = getAuth(app)
 export const googleProvider = new GoogleAuthProvider()
 googleProvider.addScope("email")
 googleProvider.addScope("profile")
-
-// Initialize Firestore (modular)
-export const db = getFirestore(app)
 
 export default app

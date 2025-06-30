@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft, Users, Copy, Check, Share2, AlertCircle } from "lucide-react"
 import { useState } from "react"
-import { createGroupFirestore } from "@/lib/group-firestore"
+import { createGroup } from "@/lib/group-storage"
 import { useAuth } from "@/hooks/use-auth"
 import { AuthGuard } from "@/components/auth-guard"
 import { VaquitappLogo } from "@/components/vaquitapp-logo"
@@ -55,20 +55,18 @@ export default function CreateGroupPage() {
     setIsLoading(true)
 
     try {
-      // Crear el grupo en Firestore
-      const newGroup = await createGroupFirestore(groupName, {
-        id: user.id,
-        name: user.name,
-        avatar: user.avatar,
-        alias: user.alias,
-      })
-      console.log("Grupo creado exitosamente en Firestore:", newGroup)
+      // Simular llamada a API
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+
+      // Crear el grupo usando la función real
+      const newGroup = createGroup(groupName)
+      console.log("Grupo creado exitosamente:", newGroup)
 
       setCreatedGroup({
         id: newGroup.id,
         name: newGroup.name,
-        inviteCode: newGroup.inviteCode || "",
-        inviteUrl: `${window.location.origin}/invite/${newGroup.inviteCode || ""}`,
+        inviteCode: newGroup.inviteCode || "ABC12345",
+        inviteUrl: `${window.location.origin}/invite/${newGroup.inviteCode || "ABC12345"}`,
       })
     } catch (error: any) {
       console.error("Error al crear grupo:", error)
