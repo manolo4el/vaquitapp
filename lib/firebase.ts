@@ -10,7 +10,9 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-let app: FirebaseApp
+// Initialize Firebase
+const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+
 let auth: Auth
 let googleProvider: GoogleAuthProvider
 
@@ -18,12 +20,6 @@ let googleProvider: GoogleAuthProvider
 function initializeFirebase() {
   if (typeof window === "undefined") {
     throw new Error("Firebase can only be initialized on the client side")
-  }
-
-  if (getApps().length === 0) {
-    app = initializeApp(firebaseConfig)
-  } else {
-    app = getApps()[0]
   }
 
   if (!auth) {
@@ -62,3 +58,5 @@ export function getGoogleProvider(): GoogleAuthProvider {
 
   return googleProvider
 }
+
+export default app

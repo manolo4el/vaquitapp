@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, createContext, useContext, type ReactNode } from "react"
-import { onAuthChange, type User } from "@/lib/auth"
+import { onAuthChange, getCurrentUser, type User } from "@/lib/auth"
 
 interface AuthContextType {
   user: User | null
@@ -21,24 +21,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined
+    // Verificar usuario inicial inmediatamente
+    const currentUser = getCurrentUser()
+    if (currentUser) {
+      setUser(currentUser)
+      setLoading(false)
+    }
 
+    // Configurar listener de cambios de autenticación
     try {
-      unsubscribe = onAuthChange((user) => {
+      const unsubscribe = onAuthChange((user) => {
         setUser(user)
         setLoading(false)
         setError(null)
       })
+
+      return unsubscribe
     } catch (err) {
       console.error("Error setting up auth listener:", err)
       setError("Error al configurar autenticación")
       setLoading(false)
-    }
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe()
-      }
+      return () => {}
     }
   }, [])
 

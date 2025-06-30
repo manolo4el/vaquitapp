@@ -57,3 +57,38 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Animaciones personalizadas */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Estilos para elementos decorativos */
+.bg-gradient-vaquitapp {
+  background: linear-gradient(135deg, #10b981 0%, #34d399 25%, #fbbf24 75%, #f97316 100%);
+}
+
+/* Mejoras de accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-bounce,
+  .animate-pulse,
+  .animate-float {
+    animation: none;
+  }
+}
+
+/* Estilos para focus */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2;
+}

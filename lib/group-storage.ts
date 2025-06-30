@@ -1,29 +1,32 @@
-export interface Member {
-  id: string
-  name: string
-  avatar?: string
-  alias?: string
-}
-
-export interface Expense {
-  id: number
-  title: string
-  amount: number
-  paidBy: { id: string; name: string }
-  splitBetween: string[]
-  date: string
-  description?: string
-}
-
 export interface Group {
   id: string
   name: string
-  members: Member[]
+  description?: string
+  members: GroupMember[]
   expenses: Expense[]
-  createdAt: string
-  inviteCode?: string
-  transfers?: Transfer[]
-  messages?: GroupMessage[]
+  createdAt: Date
+  inviteCode: string
+  createdBy: string
+}
+
+export interface GroupMember {
+  id: string
+  name: string
+  email: string
+  avatar?: string
+  alias?: string
+  joinedAt: Date
+}
+
+export interface Expense {
+  id: string
+  description: string
+  amount: number
+  paidBy: string
+  splitBetween: string[]
+  date: Date
+  category?: string
+  receipt?: string
 }
 
 export interface Transfer {
@@ -31,378 +34,317 @@ export interface Transfer {
   fromUserId: string
   toUserId: string
   amount: number
-  markedAt: string
-  markedBy: string
+  groupId: string
+  completed: boolean
+  createdAt: Date
 }
 
 export interface GroupMessage {
   id: string
+  groupId: string
   userId: string
   userName: string
-  userAvatar?: string
   message: string
-  timestamp: string
-  groupId: string
+  timestamp: Date
+  type: "text" | "system"
 }
 
-// Clave para localStorage
-const STORAGE_KEY = "amigo-gastos-groups"
+const GROUPS_STORAGE_KEY = "amigo-gastos-groups"
+const TRANSFERS_STORAGE_KEY = "amigo-gastos-transfers"
+const MESSAGES_STORAGE_KEY = "amigo-gastos-messages"
 
-// Inicializar localStorage vacío si no existe
-if (typeof window !== "undefined" && !localStorage.getItem(STORAGE_KEY)) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([]))
-}
-
+// Función para obtener todos los grupos
 export function getAllGroups(): Group[] {
   if (typeof window === "undefined") return []
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : []
+    const stored = localStorage.getItem(GROUPS_STORAGE_KEY)
+    const groups = stored ? JSON.parse(stored) : []
+    return groups.map((group: any) => ({
+      ...group,
+      createdAt: new Date(group.createdAt),
+      members: group.members.map((member: any) => ({
+        ...member,
+        joinedAt: new Date(member.joinedAt),
+      })),
+      expenses: group.expenses.map((expense: any) => ({
+        ...expense,
+        date: new Date(expense.date),
+      })),
+    }))
   } catch (error) {
-    console.error("Error al cargar grupos:", error)
+    console.error("Error al obtener grupos:", error)
     return []
   }
 }
 
-export function getGroupById(id: string): Group | null {
-  if (typeof window === "undefined") return null
+// Función para guardar grupos
+function saveGroups(groups: Group[]): void {
+  if (typeof window === "undefined") return
 
   try {
-    const groups = getAllGroups()
-    console.log("Buscando grupo con ID:", id)
-    console.log(
-      "Grupos disponibles:",
-      groups.map((g) => ({ id: g.id, name: g.name })),
-    )
-
-    const group = groups.find((group: Group) => group.id === id)
-    console.log("Grupo encontrado:", group ? group.name : "No encontrado")
-
-    return group || null
+    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups))
   } catch (error) {
-    console.error("Error al cargar grupo:", error)
-    return null
+    console.error("Error al guardar grupos:", error)
   }
 }
 
-function saveGroup(group: Group): void {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === group.id)
-
-  if (groupIndex !== -1) {
-    groups[groupIndex] = group
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-  }
-}
-
-export function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id">): Expense {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === groupId)
-
-  if (groupIndex === -1) {
-    throw new Error("Grupo no encontrado")
-  }
-
-  // Generar ID único para el gasto
-  const newExpense: Expense = {
-    ...expense,
-    id: Date.now(),
-  }
-
-  // Agregar el gasto al grupo
-  groups[groupIndex].expenses.push(newExpense)
-
-  // Guardar en localStorage
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-
-  return newExpense
-}
-
-export function createGroup(name: string): Group {
-  const groups = getAllGroups()
-
-  // Simular usuario actual para evitar dependencia circular
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-    avatar: undefined,
-    alias: "",
-  }
-
-  const inviteCode = generateInviteCode()
-  console.log("Generando grupo con código de invitación:", inviteCode)
-
+// Función para crear un nuevo grupo
+export function createGroup(name: string, description: string, createdBy: string): Group {
   const newGroup: Group = {
-    id: Date.now().toString(),
-    name: name.trim(),
-    members: [currentUser],
+    id: "group-" + Date.now(),
+    name,
+    description,
+    members: [],
     expenses: [],
-    createdAt: new Date().toISOString(),
-    inviteCode: inviteCode,
-    transfers: [],
-    messages: [],
+    createdAt: new Date(),
+    inviteCode: generateInviteCode(),
+    createdBy,
   }
 
+  const groups = getAllGroups()
   groups.push(newGroup)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-
-  console.log("Grupo creado y guardado:", { id: newGroup.id, name: newGroup.name, inviteCode: newGroup.inviteCode })
+  saveGroups(groups)
 
   return newGroup
 }
 
-export function addMemberToGroup(groupId: string, member: Member): void {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === groupId)
+// Función para generar código de invitación
+function generateInviteCode(): string {
+  return Math.random().toString(36).substring(2, 8).toUpperCase()
+}
 
-  if (groupIndex === -1) {
-    throw new Error("Grupo no encontrado")
+// Función para obtener un grupo por ID
+export function getGroupById(groupId: string): Group | null {
+  const groups = getAllGroups()
+  return groups.find((group) => group.id === groupId) || null
+}
+
+// Función para obtener un grupo por código de invitación
+export function getGroupByInviteCode(inviteCode: string): Group | null {
+  const groups = getAllGroups()
+  return groups.find((group) => group.inviteCode === inviteCode) || null
+}
+
+// Función para agregar un miembro a un grupo
+export function addMemberToGroup(groupId: string, member: Omit<GroupMember, "joinedAt">): boolean {
+  const groups = getAllGroups()
+  const groupIndex = groups.findIndex((group) => group.id === groupId)
+
+  if (groupIndex === -1) return false
+
+  const newMember: GroupMember = {
+    ...member,
+    joinedAt: new Date(),
   }
 
-  // Verificar que el miembro no esté ya en el grupo
-  const memberExists = groups[groupIndex].members.some((m) => m.id === member.id)
-  if (!memberExists) {
-    groups[groupIndex].members.push(member)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
+  // Verificar si el usuario ya es miembro
+  const existingMember = groups[groupIndex].members.find((m) => m.id === member.id)
+  if (existingMember) return false
+
+  groups[groupIndex].members.push(newMember)
+  saveGroups(groups)
+
+  return true
+}
+
+// Función para agregar un gasto
+export function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id" | "date">): boolean {
+  const groups = getAllGroups()
+  const groupIndex = groups.findIndex((group) => group.id === groupId)
+
+  if (groupIndex === -1) return false
+
+  const newExpense: Expense = {
+    ...expense,
+    id: "expense-" + Date.now(),
+    date: new Date(),
+  }
+
+  groups[groupIndex].expenses.push(newExpense)
+  saveGroups(groups)
+
+  return true
+}
+
+// Función para obtener grupos de un usuario
+export function getUserGroups(userId: string): Group[] {
+  const groups = getAllGroups()
+  return groups.filter((group) => group.members.some((member) => member.id === userId) || group.createdBy === userId)
+}
+
+// Función para verificar si un usuario es miembro de un grupo
+export function isUserMemberOfGroup(userId: string, groupId: string): boolean {
+  const group = getGroupById(groupId)
+  if (!group) return false
+
+  return group.members.some((member) => member.id === userId) || group.createdBy === userId
+}
+
+// Funciones para transferencias
+export function getAllTransfers(): Transfer[] {
+  if (typeof window === "undefined") return []
+
+  try {
+    const stored = localStorage.getItem(TRANSFERS_STORAGE_KEY)
+    const transfers = stored ? JSON.parse(stored) : []
+    return transfers.map((transfer: any) => ({
+      ...transfer,
+      createdAt: new Date(transfer.createdAt),
+    }))
+  } catch (error) {
+    console.error("Error al obtener transferencias:", error)
+    return []
   }
 }
 
-export function markTransferAsCompleted(groupId: string, fromUserId: string, toUserId: string, amount: number): void {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === groupId)
+function saveTransfers(transfers: Transfer[]): void {
+  if (typeof window === "undefined") return
 
-  if (groupIndex === -1) {
-    throw new Error("Grupo no encontrado")
+  try {
+    localStorage.setItem(TRANSFERS_STORAGE_KEY, JSON.stringify(transfers))
+  } catch (error) {
+    console.error("Error al guardar transferencias:", error)
   }
+}
 
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-  }
-
-  // Crear registro de transferencia
-  const transfer: Transfer = {
-    id: Date.now().toString(),
+export function createTransfer(fromUserId: string, toUserId: string, amount: number, groupId: string): Transfer {
+  const newTransfer: Transfer = {
+    id: "transfer-" + Date.now(),
     fromUserId,
     toUserId,
     amount,
-    markedAt: new Date().toISOString(),
-    markedBy: currentUser.id,
+    groupId,
+    completed: false,
+    createdAt: new Date(),
   }
 
-  // Agregar transferencia al grupo
-  if (!groups[groupIndex].transfers) {
-    groups[groupIndex].transfers = []
-  }
-  groups[groupIndex].transfers!.push(transfer)
+  const transfers = getAllTransfers()
+  transfers.push(newTransfer)
+  saveTransfers(transfers)
 
-  // Crear un gasto de ajuste para reflejar la transferencia
-  const fromUser = groups[groupIndex].members.find((m) => m.id === fromUserId)
-  const toUser = groups[groupIndex].members.find((m) => m.id === toUserId)
-
-  if (fromUser && toUser) {
-    const adjustmentExpense: Expense = {
-      id: Date.now() + 1,
-      title: `Transferencia: ${fromUser.name} → ${toUser.name}`,
-      amount: amount,
-      paidBy: { id: fromUserId, name: fromUser.name },
-      splitBetween: [toUserId],
-      date: new Date().toISOString(),
-      description: `Transferencia marcada como completada`,
-    }
-
-    groups[groupIndex].expenses.push(adjustmentExpense)
-  }
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
+  return newTransfer
 }
 
-export async function markMultiGroupTransferAsCompleted(
-  groupIds: string[],
-  creditorId: string,
-  amounts: number[],
-): Promise<void> {
-  const groups = getAllGroups()
+export function markTransferAsCompleted(transferId: string): boolean {
+  const transfers = getAllTransfers()
+  const transferIndex = transfers.findIndex((t) => t.id === transferId)
 
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-  }
+  if (transferIndex === -1) return false
 
-  console.log("Marcando transferencias multi-grupo:", { groupIds, creditorId, amounts })
+  transfers[transferIndex].completed = true
+  saveTransfers(transfers)
 
-  // Procesar cada grupo
-  for (let i = 0; i < groupIds.length; i++) {
-    const groupId = groupIds[i]
-    const amount = amounts[i]
-    const groupIndex = groups.findIndex((g) => g.id === groupId)
-
-    if (groupIndex === -1) {
-      console.warn(`Grupo ${groupId} no encontrado, saltando...`)
-      continue
-    }
-
-    // Crear registro de transferencia
-    const transfer: Transfer = {
-      id: `${Date.now()}-${i}`,
-      fromUserId: currentUser.id,
-      toUserId: creditorId,
-      amount,
-      markedAt: new Date().toISOString(),
-      markedBy: currentUser.id,
-    }
-
-    // Agregar transferencia al grupo
-    if (!groups[groupIndex].transfers) {
-      groups[groupIndex].transfers = []
-    }
-    groups[groupIndex].transfers!.push(transfer)
-
-    // Encontrar información del acreedor en este grupo
-    const creditor = groups[groupIndex].members.find((m) => m.id === creditorId)
-
-    if (creditor) {
-      const adjustmentExpense: Expense = {
-        id: Date.now() + i + 1,
-        title: `Liquidación consolidada: ${currentUser.name} → ${creditor.name}`,
-        amount: amount,
-        paidBy: { id: currentUser.id, name: currentUser.name },
-        splitBetween: [creditorId],
-        date: new Date().toISOString(),
-        description: `Transferencia consolidada marcada como completada`,
-      }
-
-      groups[groupIndex].expenses.push(adjustmentExpense)
-    }
-  }
-
-  // Guardar todos los cambios
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-  console.log("Transferencias multi-grupo completadas exitosamente")
+  return true
 }
 
-export function addMessageToGroup(groupId: string, message: string): GroupMessage {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === groupId)
+export function markMultiGroupTransferAsCompleted(transferIds: string[]): boolean {
+  const transfers = getAllTransfers()
+  let updated = false
 
-  if (groupIndex === -1) {
-    throw new Error("Grupo no encontrado")
+  transferIds.forEach((transferId) => {
+    const transferIndex = transfers.findIndex((t) => t.id === transferId)
+    if (transferIndex !== -1) {
+      transfers[transferIndex].completed = true
+      updated = true
+    }
+  })
+
+  if (updated) {
+    saveTransfers(transfers)
   }
 
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-    avatar: undefined,
-  }
+  return updated
+}
 
-  // Verificar que el usuario sea miembro del grupo
-  const isMember = groups[groupIndex].members.some((m) => m.id === currentUser.id)
-  if (!isMember) {
-    throw new Error("No eres miembro de este grupo")
-  }
+// Funciones para mensajes
+export function getAllMessages(): GroupMessage[] {
+  if (typeof window === "undefined") return []
 
+  try {
+    const stored = localStorage.getItem(MESSAGES_STORAGE_KEY)
+    const messages = stored ? JSON.parse(stored) : []
+    return messages.map((message: any) => ({
+      ...message,
+      timestamp: new Date(message.timestamp),
+    }))
+  } catch (error) {
+    console.error("Error al obtener mensajes:", error)
+    return []
+  }
+}
+
+function saveMessages(messages: GroupMessage[]): void {
+  if (typeof window === "undefined") return
+
+  try {
+    localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(messages))
+  } catch (error) {
+    console.error("Error al guardar mensajes:", error)
+  }
+}
+
+export function addMessageToGroup(
+  groupId: string,
+  userId: string,
+  userName: string,
+  message: string,
+  type: "text" | "system" = "text",
+): GroupMessage {
   const newMessage: GroupMessage = {
-    id: Date.now().toString(),
-    userId: currentUser.id,
-    userName: currentUser.name,
-    userAvatar: currentUser.avatar,
-    message: message.trim(),
-    timestamp: new Date().toISOString(),
-    groupId: groupId,
+    id: "message-" + Date.now(),
+    groupId,
+    userId,
+    userName,
+    message,
+    timestamp: new Date(),
+    type,
   }
 
-  // Inicializar array de mensajes si no existe
-  if (!groups[groupIndex].messages) {
-    groups[groupIndex].messages = []
-  }
-
-  groups[groupIndex].messages!.push(newMessage)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
+  const messages = getAllMessages()
+  messages.push(newMessage)
+  saveMessages(messages)
 
   return newMessage
 }
 
 export function getGroupMessages(groupId: string): GroupMessage[] {
-  const group = getGroupById(groupId)
-  if (!group) return []
-
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-  }
-
-  // Verificar que el usuario sea miembro del grupo
-  const isMember = group.members.some((m) => m.id === currentUser.id)
-  if (!isMember) return []
-
-  return group.messages || []
+  const messages = getAllMessages()
+  return messages
+    .filter((message) => message.groupId === groupId)
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
 }
 
-export function isUserMemberOfGroup(groupId: string, userId: string): boolean {
-  const group = getGroupById(groupId)
-  if (!group) return false
-
-  return group.members.some((m) => m.id === userId)
-}
-
-export function getUserGroups(): Group[] {
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-  }
-
-  const allGroups = getAllGroups()
-
-  // Filtrar solo los grupos donde el usuario es miembro
-  return allGroups.filter((group) => group.members.some((member) => member.id === currentUser.id))
-}
-
-function generateInviteCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-  let result = ""
-
-  // Generar código de 8 caracteres
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-
-  // Verificar que no exista ya este código
-  const existingGroups = getAllGroups()
-  const codeExists = existingGroups.some((group) => group.inviteCode === result)
-
-  // Si existe, generar uno nuevo recursivamente
-  if (codeExists) {
-    console.log("Código duplicado encontrado, generando nuevo:", result)
-    return generateInviteCode()
-  }
-
-  console.log("Código de invitación generado:", result)
-  return result
-}
-
-export function getGroupByInviteCode(code: string): Group | null {
+// Función para eliminar un grupo
+export function deleteGroup(groupId: string): boolean {
   const groups = getAllGroups()
-  console.log("Buscando grupo con código de invitación:", code)
-  console.log(
-    "Códigos disponibles:",
-    groups.map((g) => g.inviteCode),
-  )
+  const filteredGroups = groups.filter((group) => group.id !== groupId)
 
-  const foundGroup = groups.find((group) => group.inviteCode === code) || null
-  console.log("Grupo encontrado por código:", foundGroup ? foundGroup.name : "No encontrado")
+  if (filteredGroups.length === groups.length) return false
 
-  return foundGroup
+  saveGroups(filteredGroups)
+
+  // También eliminar mensajes y transferencias relacionadas
+  const messages = getAllMessages()
+  const filteredMessages = messages.filter((message) => message.groupId !== groupId)
+  saveMessages(filteredMessages)
+
+  const transfers = getAllTransfers()
+  const filteredTransfers = transfers.filter((transfer) => transfer.groupId !== groupId)
+  saveTransfers(filteredTransfers)
+
+  return true
 }
 
-export function clearAllData(): void {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem(STORAGE_KEY)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([]))
-  }
+// Función para actualizar un grupo
+export function updateGroup(groupId: string, updates: Partial<Pick<Group, "name" | "description">>): boolean {
+  const groups = getAllGroups()
+  const groupIndex = groups.findIndex((group) => group.id === groupId)
+
+  if (groupIndex === -1) return false
+
+  groups[groupIndex] = { ...groups[groupIndex], ...updates }
+  saveGroups(groups)
+
+  return true
 }
