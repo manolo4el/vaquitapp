@@ -1,5 +1,6 @@
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
+import { initializeApp, getApps, type FirebaseApp, getApp } from "firebase/app"
 import { getAuth, type Auth } from "firebase/auth"
+import { getFirestore } from "firebase/firestore"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,62 +11,9 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-let app: FirebaseApp
-let auth: Auth
+// Initialize Firebase only if it hasn't been initialized
+const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
 
-// Función para inicializar Firebase de forma segura
-function initializeFirebase() {
-  if (typeof window === "undefined") {
-    return null
-  }
-
-  try {
-    // Verificar si ya existe una app inicializada
-    const existingApps = getApps()
-    if (existingApps.length > 0) {
-      app = existingApps[0]
-    } else {
-      app = initializeApp(firebaseConfig)
-    }
-
-    // Inicializar Auth
-    auth = getAuth(app)
-
-    return { app, auth }
-  } catch (error) {
-    console.error("Error inicializando Firebase:", error)
-    return null
-  }
-}
-
-// Función para obtener la instancia de Auth de forma segura
-export function getFirebaseAuth(): Auth | null {
-  if (typeof window === "undefined") {
-    return null
-  }
-
-  if (!auth) {
-    const firebase = initializeFirebase()
-    if (!firebase) return null
-    auth = firebase.auth
-  }
-
-  return auth
-}
-
-// Función para obtener la app de Firebase
-export function getFirebaseApp(): FirebaseApp | null {
-  if (typeof window === "undefined") {
-    return null
-  }
-
-  if (!app) {
-    const firebase = initializeFirebase()
-    if (!firebase) return null
-    app = firebase.app
-  }
-
-  return app
-}
-
-export { app, auth }
+export const auth: Auth = getAuth(app)
+export const db = getFirestore(app)
+export default app

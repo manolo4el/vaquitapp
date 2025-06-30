@@ -1,18 +1,12 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { onAuthChange, signInWithGoogle, signOut, getCurrentUser } from "@/lib/auth"
-
-interface AuthUser {
-  id: string
-  name: string
-  email: string
-  avatar?: string
-  alias?: string
-}
+import { type User, onAuthStateChanged } from "firebase/auth"
+import { auth } from "@/lib/firebase"
+import { loginWithGoogle, signOut as authSignOut } from "@/lib/auth"
 
 interface AuthContextType {
-  user: AuthUser | null
+  user: User | null
   loading: boolean
   signIn: () => Promise<void>
   signOut: () => Promise<void>
@@ -21,71 +15,41 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Verificar si hay un usuario guardado en localStorage
-    const savedUser = getCurrentUser()
-    if (savedUser) {
-      setUser(savedUser)
-    }
-
-    // Configurar listener de cambios de autenticación
-    let unsubscribe: (() => void) | undefined
-
-    // Pequeño delay para asegurar que Firebase esté listo
-    const timer = setTimeout(() => {
-      try {
-        unsubscribe = onAuthChange((authUser) => {
-          setUser(authUser)
-          setLoading(false)
-        })
-      } catch (error) {
-        console.error("Error configurando listener de auth:", error)
-        setLoading(false)
-      }
-    }, 100)
-
-    // Fallback: si no se configura el listener en 2 segundos, marcar como no loading
-    const fallbackTimer = setTimeout(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user)
       setLoading(false)
-    }, 2000)
+    })
 
-    return () => {
-      clearTimeout(timer)
-      clearTimeout(fallbackTimer)
-      if (unsubscribe) {
-        unsubscribe()
-      }
-    }
+    return () => unsubscribe()
   }, [])
 
-  const handleSignIn = async () => {
+  const signIn = async () => {
     try {
-      const authUser = await signInWithGoogle()
-      setUser(authUser)
+      await loginWithGoogle()
     } catch (error) {
-      console.error("Error en signIn:", error)
+      console.error("Error signing in:", error)
       throw error
     }
   }
 
-  const handleSignOut = async () => {
+  const signOut = async () => {
     try {
-      await signOut()
-      setUser(null)
+      await authSignOut()
     } catch (error) {
-      console.error("Error en signOut:", error)
+      console.error("Error signing out:", error)
       throw error
     }
   }
 
-  const value: AuthContextType = {
+  const value = {
     user,
     loading,
-    signIn: handleSignIn,
-    signOut: handleSignOut,
+    signIn,
+    signOut,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
@@ -94,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error("useAuth debe ser usado dentro de un AuthProvider")
+    throw new Error("useAuth must be used within an AuthProvider")
   }
   return context
 }

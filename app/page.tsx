@@ -61,7 +61,7 @@ export default function HomePage() {
       <Card className="w-full max-w-md bg-white/80 backdrop-blur-sm shadow-xl border-0">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
-            <VaquitappLogo size="xl" />
+            <VaquitappLogo size={80} />
           </div>
           <CardTitle className="text-2xl font-bold text-gray-800">¡Bienvenido! 🎉</CardTitle>
           <CardDescription className="text-gray-600 text-base">

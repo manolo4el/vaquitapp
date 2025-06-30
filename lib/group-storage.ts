@@ -1,408 +1,331 @@
-export interface Member {
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  getDoc,
+  query,
+  where,
+  orderBy,
+  arrayUnion,
+  arrayRemove,
+  Timestamp,
+} from "firebase/firestore"
+import { db } from "./firebase"
+
+export interface User {
   id: string
   name: string
+  email: string
   avatar?: string
-  alias?: string
 }
 
 export interface Expense {
-  id: number
-  title: string
+  id: string
+  description: string
   amount: number
-  paidBy: { id: string; name: string }
+  paidBy: string
+  paidByName: string
   splitBetween: string[]
-  date: string
-  description?: string
+  date: Date
+  category?: string
 }
 
 export interface Group {
   id: string
   name: string
-  members: Member[]
+  description?: string
+  members: User[]
   expenses: Expense[]
-  createdAt: string
+  createdBy: string
+  createdAt: Date
   inviteCode?: string
-  transfers?: Transfer[]
-  messages?: GroupMessage[]
 }
 
 export interface Transfer {
   id: string
-  fromUserId: string
-  toUserId: string
+  from: string
+  to: string
   amount: number
-  markedAt: string
-  markedBy: string
+  groupId: string
+  completed: boolean
+  date: Date
+}
+
+export interface MultiGroupTransfer {
+  id: string
+  from: string
+  to: string
+  amount: number
+  groupIds: string[]
+  completed: boolean
+  date: Date
 }
 
 export interface GroupMessage {
   id: string
+  groupId: string
   userId: string
   userName: string
-  userAvatar?: string
   message: string
-  timestamp: string
-  groupId: string
+  timestamp: Date
+  type: "message" | "expense" | "transfer" | "system"
 }
 
-// Clave para localStorage
-const STORAGE_KEY = "amigo-gastos-groups"
-
-// Inicializar localStorage vacío si no existe
-if (typeof window !== "undefined" && !localStorage.getItem(STORAGE_KEY)) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([]))
-}
-
-export function getAllGroups(): Group[] {
-  if (typeof window === "undefined") return []
-
+// Groups
+export const createGroup = async (group: Omit<Group, "id">): Promise<string> => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : []
+    const docRef = await addDoc(collection(db, "groups"), {
+      ...group,
+      createdAt: Timestamp.fromDate(group.createdAt),
+      expenses: group.expenses.map((expense) => ({
+        ...expense,
+        date: Timestamp.fromDate(expense.date),
+      })),
+    })
+    return docRef.id
   } catch (error) {
-    console.error("Error al cargar grupos:", error)
-    return []
+    console.error("Error creating group:", error)
+    throw error
   }
 }
 
-export function getGroupById(id: string): Group | null {
-  if (typeof window === "undefined") return null
-
+export const getGroups = async (): Promise<Group[]> => {
   try {
-    const groups = getAllGroups()
-    console.log("Buscando grupo con ID:", id)
-    console.log(
-      "Grupos disponibles:",
-      groups.map((g) => ({ id: g.id, name: g.name })),
-    )
-
-    const group = groups.find((group: Group) => group.id === id)
-    console.log("Grupo encontrado:", group ? group.name : "No encontrado")
-
-    return group || null
+    const querySnapshot = await getDocs(collection(db, "groups"))
+    return querySnapshot.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        expenses:
+          data.expenses?.map((expense: any) => ({
+            ...expense,
+            date: expense.date?.toDate() || new Date(),
+          })) || [],
+      } as Group
+    })
   } catch (error) {
-    console.error("Error al cargar grupo:", error)
+    console.error("Error getting groups:", error)
+    throw error
+  }
+}
+
+export const getGroup = async (id: string): Promise<Group | null> => {
+  try {
+    const docRef = doc(db, "groups", id)
+    const docSnap = await getDoc(docRef)
+
+    if (docSnap.exists()) {
+      const data = docSnap.data()
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        expenses:
+          data.expenses?.map((expense: any) => ({
+            ...expense,
+            date: expense.date?.toDate() || new Date(),
+          })) || [],
+      } as Group
+    }
     return null
+  } catch (error) {
+    console.error("Error getting group:", error)
+    throw error
   }
 }
 
-function saveGroup(group: Group): void {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === group.id)
+export const updateGroup = async (id: string, updates: Partial<Group>): Promise<void> => {
+  try {
+    const docRef = doc(db, "groups", id)
+    const updateData = { ...updates }
 
-  if (groupIndex !== -1) {
-    groups[groupIndex] = group
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-  }
-}
-
-export function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id">): Expense {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === groupId)
-
-  if (groupIndex === -1) {
-    throw new Error("Grupo no encontrado")
-  }
-
-  // Generar ID único para el gasto
-  const newExpense: Expense = {
-    ...expense,
-    id: Date.now(),
-  }
-
-  // Agregar el gasto al grupo
-  groups[groupIndex].expenses.push(newExpense)
-
-  // Guardar en localStorage
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-
-  return newExpense
-}
-
-export function createGroup(name: string): Group {
-  const groups = getAllGroups()
-
-  // Simular usuario actual para evitar dependencia circular
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-    avatar: undefined,
-    alias: "",
-  }
-
-  const inviteCode = generateInviteCode()
-  console.log("Generando grupo con código de invitación:", inviteCode)
-
-  const newGroup: Group = {
-    id: Date.now().toString(),
-    name: name.trim(),
-    members: [currentUser],
-    expenses: [],
-    createdAt: new Date().toISOString(),
-    inviteCode: inviteCode,
-    transfers: [],
-    messages: [],
-  }
-
-  groups.push(newGroup)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-
-  console.log("Grupo creado y guardado:", { id: newGroup.id, name: newGroup.name, inviteCode: newGroup.inviteCode })
-
-  return newGroup
-}
-
-export function addMemberToGroup(groupId: string, member: Member): void {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === groupId)
-
-  if (groupIndex === -1) {
-    throw new Error("Grupo no encontrado")
-  }
-
-  // Verificar que el miembro no esté ya en el grupo
-  const memberExists = groups[groupIndex].members.some((m) => m.id === member.id)
-  if (!memberExists) {
-    groups[groupIndex].members.push(member)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-  }
-}
-
-export function markTransferAsCompleted(groupId: string, fromUserId: string, toUserId: string, amount: number): void {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === groupId)
-
-  if (groupIndex === -1) {
-    throw new Error("Grupo no encontrado")
-  }
-
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-  }
-
-  // Crear registro de transferencia
-  const transfer: Transfer = {
-    id: Date.now().toString(),
-    fromUserId,
-    toUserId,
-    amount,
-    markedAt: new Date().toISOString(),
-    markedBy: currentUser.id,
-  }
-
-  // Agregar transferencia al grupo
-  if (!groups[groupIndex].transfers) {
-    groups[groupIndex].transfers = []
-  }
-  groups[groupIndex].transfers!.push(transfer)
-
-  // Crear un gasto de ajuste para reflejar la transferencia
-  const fromUser = groups[groupIndex].members.find((m) => m.id === fromUserId)
-  const toUser = groups[groupIndex].members.find((m) => m.id === toUserId)
-
-  if (fromUser && toUser) {
-    const adjustmentExpense: Expense = {
-      id: Date.now() + 1,
-      title: `Transferencia: ${fromUser.name} → ${toUser.name}`,
-      amount: amount,
-      paidBy: { id: fromUserId, name: fromUser.name },
-      splitBetween: [toUserId],
-      date: new Date().toISOString(),
-      description: `Transferencia marcada como completada`,
+    if (updates.expenses) {
+      updateData.expenses = updates.expenses.map((expense) => ({
+        ...expense,
+        date: Timestamp.fromDate(expense.date),
+      }))
     }
 
-    groups[groupIndex].expenses.push(adjustmentExpense)
+    await updateDoc(docRef, updateData)
+  } catch (error) {
+    console.error("Error updating group:", error)
+    throw error
   }
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
 }
 
-export async function markMultiGroupTransferAsCompleted(
-  groupIds: string[],
-  creditorId: string,
-  amounts: number[],
-): Promise<void> {
-  const groups = getAllGroups()
-
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
+export const deleteGroup = async (id: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, "groups", id))
+  } catch (error) {
+    console.error("Error deleting group:", error)
+    throw error
   }
-
-  console.log("Marcando transferencias multi-grupo:", { groupIds, creditorId, amounts })
-
-  // Procesar cada grupo
-  for (let i = 0; i < groupIds.length; i++) {
-    const groupId = groupIds[i]
-    const amount = amounts[i]
-    const groupIndex = groups.findIndex((g) => g.id === groupId)
-
-    if (groupIndex === -1) {
-      console.warn(`Grupo ${groupId} no encontrado, saltando...`)
-      continue
-    }
-
-    // Crear registro de transferencia
-    const transfer: Transfer = {
-      id: `${Date.now()}-${i}`,
-      fromUserId: currentUser.id,
-      toUserId: creditorId,
-      amount,
-      markedAt: new Date().toISOString(),
-      markedBy: currentUser.id,
-    }
-
-    // Agregar transferencia al grupo
-    if (!groups[groupIndex].transfers) {
-      groups[groupIndex].transfers = []
-    }
-    groups[groupIndex].transfers!.push(transfer)
-
-    // Encontrar información del acreedor en este grupo
-    const creditor = groups[groupIndex].members.find((m) => m.id === creditorId)
-
-    if (creditor) {
-      const adjustmentExpense: Expense = {
-        id: Date.now() + i + 1,
-        title: `Liquidación consolidada: ${currentUser.name} → ${creditor.name}`,
-        amount: amount,
-        paidBy: { id: currentUser.id, name: currentUser.name },
-        splitBetween: [creditorId],
-        date: new Date().toISOString(),
-        description: `Transferencia consolidada marcada como completada`,
-      }
-
-      groups[groupIndex].expenses.push(adjustmentExpense)
-    }
-  }
-
-  // Guardar todos los cambios
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-  console.log("Transferencias multi-grupo completadas exitosamente")
 }
 
-export function addMessageToGroup(groupId: string, message: string): GroupMessage {
-  const groups = getAllGroups()
-  const groupIndex = groups.findIndex((g) => g.id === groupId)
-
-  if (groupIndex === -1) {
-    throw new Error("Grupo no encontrado")
+export const addMemberToGroup = async (groupId: string, member: User): Promise<void> => {
+  try {
+    const docRef = doc(db, "groups", groupId)
+    await updateDoc(docRef, {
+      members: arrayUnion(member),
+    })
+  } catch (error) {
+    console.error("Error adding member to group:", error)
+    throw error
   }
-
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-    avatar: undefined,
-  }
-
-  // Verificar que el usuario sea miembro del grupo
-  const isMember = groups[groupIndex].members.some((m) => m.id === currentUser.id)
-  if (!isMember) {
-    throw new Error("No eres miembro de este grupo")
-  }
-
-  const newMessage: GroupMessage = {
-    id: Date.now().toString(),
-    userId: currentUser.id,
-    userName: currentUser.name,
-    userAvatar: currentUser.avatar,
-    message: message.trim(),
-    timestamp: new Date().toISOString(),
-    groupId: groupId,
-  }
-
-  // Inicializar array de mensajes si no existe
-  if (!groups[groupIndex].messages) {
-    groups[groupIndex].messages = []
-  }
-
-  groups[groupIndex].messages!.push(newMessage)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-
-  return newMessage
 }
 
-export function getGroupMessages(groupId: string): GroupMessage[] {
-  const group = getGroupById(groupId)
-  if (!group) return []
+export const removeMemberFromGroup = async (groupId: string, memberId: string): Promise<void> => {
+  try {
+    const group = await getGroup(groupId)
+    if (!group) throw new Error("Group not found")
 
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
+    const memberToRemove = group.members.find((m) => m.id === memberId)
+    if (!memberToRemove) throw new Error("Member not found")
+
+    const docRef = doc(db, "groups", groupId)
+    await updateDoc(docRef, {
+      members: arrayRemove(memberToRemove),
+    })
+  } catch (error) {
+    console.error("Error removing member from group:", error)
+    throw error
   }
-
-  // Verificar que el usuario sea miembro del grupo
-  const isMember = group.members.some((m) => m.id === currentUser.id)
-  if (!isMember) return []
-
-  return group.messages || []
 }
 
-export function isUserMemberOfGroup(groupId: string, userId: string): boolean {
-  const group = getGroupById(groupId)
-  if (!group) return false
-
-  return group.members.some((m) => m.id === userId)
-}
-
-export function getUserGroups(): Group[] {
-  // Simular usuario actual
-  const currentUser = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
+// Transfers
+export const createTransfer = async (transfer: Omit<Transfer, "id">): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, "transfers"), {
+      ...transfer,
+      date: Timestamp.fromDate(transfer.date),
+    })
+    return docRef.id
+  } catch (error) {
+    console.error("Error creating transfer:", error)
+    throw error
   }
-
-  const allGroups = getAllGroups()
-
-  // Filtrar solo los grupos donde el usuario es miembro
-  return allGroups.filter((group) => group.members.some((member) => member.id === currentUser.id))
 }
 
-function generateInviteCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-  let result = ""
-
-  // Generar código de 8 caracteres
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
+export const getTransfers = async (): Promise<Transfer[]> => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "transfers"))
+    return querySnapshot.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        ...data,
+        date: data.date?.toDate() || new Date(),
+      } as Transfer
+    })
+  } catch (error) {
+    console.error("Error getting transfers:", error)
+    throw error
   }
+}
 
-  // Verificar que no exista ya este código
-  const existingGroups = getAllGroups()
-  const codeExists = existingGroups.some((group) => group.inviteCode === result)
-
-  // Si existe, generar uno nuevo recursivamente
-  if (codeExists) {
-    console.log("Código duplicado encontrado, generando nuevo:", result)
-    return generateInviteCode()
+export const markTransferAsCompleted = async (transferId: string): Promise<void> => {
+  try {
+    const docRef = doc(db, "transfers", transferId)
+    await updateDoc(docRef, {
+      completed: true,
+    })
+  } catch (error) {
+    console.error("Error marking transfer as completed:", error)
+    throw error
   }
-
-  console.log("Código de invitación generado:", result)
-  return result
 }
 
-export function getGroupByInviteCode(code: string): Group | null {
-  const groups = getAllGroups()
-  console.log("Buscando grupo con código de invitación:", code)
-  console.log(
-    "Códigos disponibles:",
-    groups.map((g) => g.inviteCode),
-  )
-
-  const foundGroup = groups.find((group) => group.inviteCode === code) || null
-  console.log("Grupo encontrado por código:", foundGroup ? foundGroup.name : "No encontrado")
-
-  return foundGroup
+// Multi-group transfers
+export const createMultiGroupTransfer = async (transfer: Omit<MultiGroupTransfer, "id">): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, "multiGroupTransfers"), {
+      ...transfer,
+      date: Timestamp.fromDate(transfer.date),
+    })
+    return docRef.id
+  } catch (error) {
+    console.error("Error creating multi-group transfer:", error)
+    throw error
+  }
 }
 
-export function clearAllData(): void {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem(STORAGE_KEY)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([]))
+export const getMultiGroupTransfers = async (): Promise<MultiGroupTransfer[]> => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "multiGroupTransfers"))
+    return querySnapshot.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        ...data,
+        date: data.date?.toDate() || new Date(),
+      } as MultiGroupTransfer
+    })
+  } catch (error) {
+    console.error("Error getting multi-group transfers:", error)
+    throw error
+  }
+}
+
+export const markMultiGroupTransferAsCompleted = async (transferId: string): Promise<void> => {
+  try {
+    const docRef = doc(db, "multiGroupTransfers", transferId)
+    await updateDoc(docRef, {
+      completed: true,
+    })
+  } catch (error) {
+    console.error("Error marking multi-group transfer as completed:", error)
+    throw error
+  }
+}
+
+// Messages
+export const addMessageToGroup = async (message: Omit<GroupMessage, "id">): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, "groupMessages"), {
+      ...message,
+      timestamp: Timestamp.fromDate(message.timestamp),
+    })
+    return docRef.id
+  } catch (error) {
+    console.error("Error adding message to group:", error)
+    throw error
+  }
+}
+
+export const getGroupMessages = async (groupId: string): Promise<GroupMessage[]> => {
+  try {
+    const q = query(collection(db, "groupMessages"), where("groupId", "==", groupId), orderBy("timestamp", "asc"))
+    const querySnapshot = await getDocs(q)
+    return querySnapshot.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        ...data,
+        timestamp: data.timestamp?.toDate() || new Date(),
+      } as GroupMessage
+    })
+  } catch (error) {
+    console.error("Error getting group messages:", error)
+    throw error
+  }
+}
+
+// Utility functions
+export const isUserMemberOfGroup = (group: Group, userId: string): boolean => {
+  return group.members.some((member) => member.id === userId)
+}
+
+export const getUserGroups = async (userId: string): Promise<Group[]> => {
+  try {
+    const groups = await getGroups()
+    return groups.filter((group) => isUserMemberOfGroup(group, userId))
+  } catch (error) {
+    console.error("Error getting user groups:", error)
+    throw error
   }
 }
