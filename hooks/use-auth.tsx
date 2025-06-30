@@ -1,89 +1,69 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { getCurrentUser, type User } from "@/lib/auth"
+import type { User } from "firebase/auth"
+import { onAuthChange, signInWithGoogle, signOut } from "@/lib/auth"
 
 interface AuthContextType {
   user: User | null
-  isAuthenticated: boolean
-  isLoading: boolean
-  refreshUser: () => void
-  logout: () => Promise<void>
+  loading: boolean
+  signIn: () => Promise<void>
+  signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-
-  const refreshUser = () => {
-    const currentUser = getCurrentUser()
-    setUser(currentUser)
-  }
-
-  const handleLogout = async () => {
-    try {
-      const { logout } = await import("@/lib/auth")
-      await logout()
-      setUser(null)
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error)
-      // Limpiar usuario local aunque haya error
-      setUser(null)
-      throw error
-    }
-  }
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Verificar usuario inicial desde localStorage
-    const currentUser = getCurrentUser()
-    setUser(currentUser)
-    setIsLoading(false)
+    if (typeof window === "undefined") {
+      setLoading(false)
+      return
+    }
 
-    // Configurar listener de cambios de autenticación solo en el cliente
-    let unsubscribe: (() => void) | null = null
-
-    const setupAuthListener = async () => {
+    // Add a small delay to ensure Firebase is ready
+    const timer = setTimeout(() => {
       try {
-        // Esperar un poco para asegurar que Firebase esté listo
-        await new Promise((resolve) => setTimeout(resolve, 100))
-
-        const { onAuthChange } = await import("@/lib/auth")
-        unsubscribe = onAuthChange((user) => {
+        const unsubscribe = onAuthChange((user) => {
           setUser(user)
-          setIsLoading(false)
+          setLoading(false)
         })
+        return unsubscribe
       } catch (error) {
-        console.error("Error al configurar listener de auth:", error)
-        setIsLoading(false)
+        console.error("Error setting up auth listener:", error)
+        setLoading(false)
       }
-    }
+    }, 100)
 
-    // Solo configurar el listener en el cliente y después de un pequeño delay
-    if (typeof window !== "undefined") {
-      setupAuthListener()
-    }
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe()
-      }
-    }
+    return () => clearTimeout(timer)
   }, [])
 
-  const value: AuthContextType = {
-    user,
-    isAuthenticated: !!user,
-    isLoading,
-    refreshUser,
-    logout: handleLogout,
+  const handleSignIn = async () => {
+    try {
+      await signInWithGoogle()
+    } catch (error) {
+      console.error("Error signing in:", error)
+    }
   }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+    } catch (error) {
+      console.error("Error signing out:", error)
+    }
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, loading, signIn: handleSignIn, signOut: handleSignOut }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
-export function useAuth(): AuthContextType {
+export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider")

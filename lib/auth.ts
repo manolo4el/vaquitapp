@@ -1,5 +1,11 @@
-import { signInWithPopup, signOut, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
-import { initializeFirebaseAuth } from "./firebase"
+import {
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  type User as FirebaseUser,
+} from "firebase/auth"
+import { getFirebaseAuth } from "./firebase"
 
 export interface User {
   id: string
@@ -12,6 +18,21 @@ export interface User {
 // Claves para localStorage
 const USER_STORAGE_KEY = "amigo-gastos-user"
 const PENDING_INVITE_KEY = "amigo-gastos-pending-invite"
+
+let googleProvider: GoogleAuthProvider | null = null
+
+function getGoogleProvider(): GoogleAuthProvider {
+  if (typeof window === "undefined") {
+    throw new Error("Google provider can only be used on the client side")
+  }
+
+  if (!googleProvider) {
+    googleProvider = new GoogleAuthProvider()
+    googleProvider.addScope("email")
+    googleProvider.addScope("profile")
+  }
+  return googleProvider
+}
 
 // Función para convertir usuario de Firebase a nuestro formato
 function mapFirebaseUser(firebaseUser: FirebaseUser): User {
@@ -60,21 +81,15 @@ function clearUser(): void {
 }
 
 // Login con Google
-export async function loginWithGoogle(): Promise<User> {
-  if (typeof window === "undefined") {
-    throw new Error("Login solo disponible en el cliente")
-  }
-
+export async function signInWithGoogle(): Promise<User | null> {
   try {
-    console.log("Iniciando login con Google...")
-
-    const { auth, googleProvider } = initializeFirebaseAuth()
-
-    if (!auth || !googleProvider) {
-      throw new Error("Firebase Auth no está disponible")
+    if (typeof window === "undefined") {
+      throw new Error("Sign in can only be performed on the client side")
     }
 
-    const result = await signInWithPopup(auth, googleProvider)
+    const auth = getFirebaseAuth()
+    const provider = getGoogleProvider()
+    const result = await signInWithPopup(auth, provider)
     const firebaseUser = result.user
 
     if (!firebaseUser) {
@@ -90,42 +105,29 @@ export async function loginWithGoogle(): Promise<User> {
     saveUser(user)
 
     return user
-  } catch (error: any) {
-    console.error("Error en login con Google:", error)
-
-    // Manejar errores específicos
-    if (error.code === "auth/popup-closed-by-user") {
-      throw new Error("Login cancelado por el usuario")
-    } else if (error.code === "auth/popup-blocked") {
-      throw new Error("Popup bloqueado por el navegador")
-    } else if (error.code === "auth/network-request-failed") {
-      throw new Error("Error de conexión. Verifica tu internet.")
-    } else {
-      throw new Error(error.message || "Error al iniciar sesión")
-    }
+  } catch (error) {
+    console.error("Error signing in with Google:", error)
+    throw error
   }
 }
 
 // Logout
-export async function logout(): Promise<void> {
-  if (typeof window === "undefined") {
-    throw new Error("Logout solo disponible en el cliente")
-  }
-
+export async function signOut(): Promise<void> {
   try {
-    const { auth } = initializeFirebaseAuth()
-
-    if (auth) {
-      await signOut(auth)
+    if (typeof window === "undefined") {
+      throw new Error("Sign out can only be performed on the client side")
     }
+
+    const auth = getFirebaseAuth()
+    await firebaseSignOut(auth)
 
     clearUser()
     console.log("Logout exitoso")
-  } catch (error: any) {
-    console.error("Error en logout:", error)
+  } catch (error) {
+    console.error("Error signing out:", error)
     // Limpiar usuario aunque haya error en Firebase
     clearUser()
-    throw new Error(error.message || "Error al cerrar sesión")
+    throw error
   }
 }
 
@@ -137,8 +139,7 @@ export function onAuthChange(callback: (user: User | null) => void): () => void 
   }
 
   try {
-    const { auth } = initializeFirebaseAuth()
-
+    const auth = getFirebaseAuth()
     if (!auth) {
       console.warn("Firebase Auth no disponible para listener")
       return () => {}
@@ -155,7 +156,7 @@ export function onAuthChange(callback: (user: User | null) => void): () => void 
       }
     })
   } catch (error) {
-    console.error("Error al configurar listener de auth:", error)
+    console.error("Error setting up auth listener:", error)
     return () => {}
   }
 }

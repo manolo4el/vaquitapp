@@ -1,5 +1,5 @@
-import { initializeApp, getApps, getApp } from "firebase/app"
-import { getAuth, GoogleAuthProvider } from "firebase/auth"
+import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
+import { getAuth, type Auth } from "firebase/auth"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,34 +10,30 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-// Inicializar Firebase app
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
+let app: FirebaseApp
+let auth: Auth | null = null
 
-// Variables para auth y provider
-let auth: any = null
-let googleProvider: GoogleAuthProvider | null = null
-
-// Función para inicializar auth de forma segura
-export function initializeFirebaseAuth() {
+// Initialize Firebase only on client side
+export function getFirebaseApp(): FirebaseApp {
   if (typeof window === "undefined") {
-    return { auth: null, googleProvider: null }
+    throw new Error("Firebase can only be initialized on the client side")
+  }
+
+  if (!app) {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+  }
+  return app
+}
+
+// Get Firebase Auth instance
+export function getFirebaseAuth(): Auth {
+  if (typeof window === "undefined") {
+    throw new Error("Firebase Auth can only be used on the client side")
   }
 
   if (!auth) {
-    try {
-      auth = getAuth(app)
-      googleProvider = new GoogleAuthProvider()
-      googleProvider.addScope("email")
-      googleProvider.addScope("profile")
-      console.log("Firebase Auth inicializado correctamente")
-    } catch (error) {
-      console.error("Error al inicializar Firebase Auth:", error)
-      return { auth: null, googleProvider: null }
-    }
+    const app = getFirebaseApp()
+    auth = getAuth(app)
   }
-
-  return { auth, googleProvider }
+  return auth
 }
-
-export { app }
-export default app
