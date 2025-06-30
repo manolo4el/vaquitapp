@@ -1,35 +1,37 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { VaquitappLogo } from "@/components/vaquitapp-logo"
+import { signInWithGoogle } from "@/lib/auth"
 import { useAuth } from "@/hooks/use-auth"
-import { Loader2 } from "lucide-react"
 
 export default function HomePage() {
-  const { user, loading, signIn } = useAuth()
-  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const { user, loading } = useAuth()
 
-  useEffect(() => {
-    if (user && !loading) {
-      router.push("/dashboard")
-    }
-  }, [user, loading, router])
+  // Si el usuario ya está autenticado, redirigir al dashboard
+  if (!loading && user) {
+    router.push("/dashboard")
+    return null
+  }
 
-  const handleSignIn = async () => {
-    setIsSigningIn(true)
-    setError(null)
+  const handleGoogleLogin = async () => {
     try {
-      await signIn()
-    } catch (error: any) {
-      console.error("Error al iniciar sesión:", error)
-      setError(error.message || "Error al iniciar sesión")
+      setIsLoading(true)
+      setError(null)
+
+      await signInWithGoogle()
+      router.push("/dashboard")
+    } catch (err: any) {
+      console.error("Error en login:", err)
+      setError(err.message || "Error al iniciar sesión")
     } finally {
-      setIsSigningIn(false)
+      setIsLoading(false)
     }
   }
 
@@ -37,72 +39,53 @@ export default function HomePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50">
         <div className="text-center">
-          <VaquitappLogo size="lg" className="justify-center mb-4" />
-          <Loader2 className="w-6 h-6 animate-spin text-green-600 mx-auto" />
-        </div>
-      </div>
-    )
-  }
-
-  if (user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50">
-        <div className="text-center">
-          <VaquitappLogo size="lg" className="justify-center mb-4" />
-          <p className="text-green-600">Redirigiendo al dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Elementos decorativos de fondo */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-20 w-32 h-32 bg-green-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"></div>
-        <div
-          className="absolute top-40 right-32 w-24 h-24 bg-yellow-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"
-          style={{ animationDelay: "1s" }}
-        ></div>
-        <div
-          className="absolute bottom-32 left-32 w-28 h-28 bg-orange-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"
-          style={{ animationDelay: "2s" }}
-        ></div>
-        <div
-          className="absolute bottom-20 right-20 w-20 h-20 bg-green-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-pulse"
-          style={{ animationDelay: "3s" }}
-        ></div>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50 relative overflow-hidden">
+      {/* Elementos decorativos */}
+      <div className="absolute top-10 left-10 w-20 h-20 bg-green-200 rounded-full opacity-60 animate-pulse"></div>
+      <div className="absolute top-32 right-20 w-16 h-16 bg-yellow-200 rounded-full opacity-60 animate-pulse delay-1000"></div>
+      <div className="absolute bottom-20 left-20 w-24 h-24 bg-orange-200 rounded-full opacity-60 animate-pulse delay-2000"></div>
+      <div className="absolute bottom-32 right-10 w-12 h-12 bg-green-300 rounded-full opacity-60 animate-pulse delay-500"></div>
 
-      <Card className="w-full max-w-md relative z-10 bg-white/90 backdrop-blur-sm border-0 shadow-2xl">
-        <CardContent className="p-8 text-center">
-          {/* Logo */}
-          <div className="mb-8">
-            <VaquitappLogo size="xl" className="justify-center mb-4" />
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">¡Hola!</h1>
-            <p className="text-gray-600">Divide gastos con tus amigos súper fácil</p>
+      <Card className="w-full max-w-md mx-4 bg-white/80 backdrop-blur-sm shadow-xl border-0">
+        <CardHeader className="text-center pb-2">
+          <div className="flex justify-center mb-4">
+            <VaquitappLogo size={80} />
           </div>
+          <CardTitle className="text-2xl font-bold text-gray-800">¡Bienvenido! 🐄</CardTitle>
+          <CardDescription className="text-gray-600 text-base">
+            Divide gastos con tus amigos de forma fácil y divertida
+          </CardDescription>
+        </CardHeader>
 
-          {/* Error message */}
+        <CardContent className="space-y-4">
           {error && (
-            <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{error}</div>
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
           )}
 
-          {/* Google Sign In Button */}
           <Button
-            onClick={handleSignIn}
-            disabled={isSigningIn}
-            className="w-full bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-sm h-12 text-base font-medium mb-6"
+            onClick={handleGoogleLogin}
+            disabled={isLoading}
+            className="w-full h-12 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-sm transition-all duration-200 hover:shadow-md"
             variant="outline"
           >
-            {isSigningIn ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                Iniciando sesión...
-              </>
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                <span>Iniciando sesión...</span>
+              </div>
             ) : (
-              <>
-                <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -120,31 +103,13 @@ export default function HomePage() {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                Continuar con Google
-              </>
+                <span className="font-medium">Continuar con Google</span>
+              </div>
             )}
           </Button>
 
-          {/* Features */}
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <span className="text-2xl">👥</span>
-              </div>
-              <p className="text-xs text-gray-600">Grupos fáciles</p>
-            </div>
-            <div>
-              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <span className="text-2xl">🧮</span>
-              </div>
-              <p className="text-xs text-gray-600">Cálculo automático</p>
-            </div>
-            <div>
-              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <span className="text-2xl">💸</span>
-              </div>
-              <p className="text-xs text-gray-600">Sin complicaciones</p>
-            </div>
+          <div className="text-center pt-2">
+            <p className="text-xs text-gray-500">Al continuar, aceptas nuestros términos y condiciones</p>
           </div>
         </CardContent>
       </Card>

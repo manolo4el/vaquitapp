@@ -1,48 +1,15 @@
-import { cn } from "@/lib/utils"
+import Image from "next/image"
 
 interface VaquitappLogoProps {
-  size?: "sm" | "md" | "lg" | "xl" | number
+  size?: number
   className?: string
-  showText?: boolean
 }
 
-export function VaquitappLogo({ size = "md", className, showText = false }: VaquitappLogoProps) {
-  const getSize = () => {
-    if (typeof size === "number") return size
-
-    switch (size) {
-      case "sm":
-        return 32
-      case "md":
-        return 48
-      case "lg":
-        return 64
-      case "xl":
-        return 80
-      default:
-        return 48
-    }
-  }
-
-  const logoSize = getSize()
-
+export function VaquitappLogo({ size = 40, className = "" }: VaquitappLogoProps) {
   return (
-    <div className={cn("flex items-center gap-3", className)}>
-      <div className="relative">
-        <img
-          src="/vaquitapp-icon.svg"
-          alt="VaquitApp Logo"
-          width={logoSize}
-          height={logoSize}
-          className="drop-shadow-sm"
-        />
-      </div>
-      {showText && (
-        <div className="flex flex-col">
-          <h1 className="text-2xl font-bold text-green-700">VaquitApp</h1>
-          <p className="text-sm text-green-600">Divide gastos fácil</p>
-        </div>
-      )}
+    <div className={`flex items-center gap-2 ${className}`}>
+      <Image src="/vaquitapp-icon.svg" alt="VaquitApp" width={size} height={size} className="rounded-lg" />
+      <span className="text-xl font-bold text-green-600">VaquitApp</span>
     </div>
   )
 }

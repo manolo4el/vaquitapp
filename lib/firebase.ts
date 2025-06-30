@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from "firebase/app"
+import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth"
 
 const firebaseConfig = {
@@ -10,27 +10,24 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-// Initialize Firebase
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
-
+let app: FirebaseApp
 let auth: Auth
 let googleProvider: GoogleAuthProvider
 
-export function getFirebaseAuth(): Auth {
+// Función para inicializar Firebase de forma segura
+function initializeFirebase() {
   if (typeof window === "undefined") {
-    throw new Error("Firebase Auth can only be used on the client side")
+    throw new Error("Firebase can only be initialized on the client side")
+  }
+
+  if (getApps().length === 0) {
+    app = initializeApp(firebaseConfig)
+  } else {
+    app = getApps()[0]
   }
 
   if (!auth) {
     auth = getAuth(app)
-  }
-
-  return auth
-}
-
-export function getGoogleProvider(): GoogleAuthProvider {
-  if (typeof window === "undefined") {
-    throw new Error("Google provider can only be used on the client side")
   }
 
   if (!googleProvider) {
@@ -38,8 +35,30 @@ export function getGoogleProvider(): GoogleAuthProvider {
     googleProvider.addScope("email")
     googleProvider.addScope("profile")
   }
+}
+
+// Función para obtener la instancia de Auth
+export function getFirebaseAuth(): Auth {
+  if (typeof window === "undefined") {
+    throw new Error("Firebase Auth can only be used on the client side")
+  }
+
+  if (!auth) {
+    initializeFirebase()
+  }
+
+  return auth
+}
+
+// Función para obtener el provider de Google
+export function getGoogleProvider(): GoogleAuthProvider {
+  if (typeof window === "undefined") {
+    throw new Error("Google provider can only be used on the client side")
+  }
+
+  if (!googleProvider) {
+    initializeFirebase()
+  }
 
   return googleProvider
 }
-
-export default app

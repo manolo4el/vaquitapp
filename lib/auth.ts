@@ -1,3 +1,11 @@
+import {
+  signInWithPopup,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  type User as FirebaseUser,
+} from "firebase/auth"
+import { getFirebaseAuth, getGoogleProvider } from "./firebase"
+
 export interface User {
   id: string
   name: string
@@ -9,6 +17,17 @@ export interface User {
 // Claves para localStorage
 const USER_STORAGE_KEY = "amigo-gastos-user"
 const PENDING_INVITE_KEY = "amigo-gastos-pending-invite"
+
+// Función para convertir usuario de Firebase a nuestro formato
+function mapFirebaseUser(firebaseUser: FirebaseUser): User {
+  return {
+    id: firebaseUser.uid,
+    name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Usuario",
+    email: firebaseUser.email || "",
+    avatar: firebaseUser.photoURL || undefined,
+    alias: "", // Se configurará en el perfil
+  }
+}
 
 // Función para obtener usuario actual
 export function getCurrentUser(): User | null {
@@ -45,42 +64,94 @@ function clearUser(): void {
   }
 }
 
-// Login con Google (simulado por ahora para evitar errores de Firebase)
+// Login con Google
 export async function signInWithGoogle(): Promise<User> {
-  // Simular un delay de login
-  await new Promise((resolve) => setTimeout(resolve, 1000))
-
-  // Crear usuario simulado
-  const mockUser: User = {
-    id: "mock-user-" + Date.now(),
-    name: "Usuario Demo",
-    email: "demo@vaquitapp.com",
-    avatar: "https://via.placeholder.com/40",
-    alias: "",
+  if (typeof window === "undefined") {
+    throw new Error("Sign in can only be performed on the client side")
   }
 
-  saveUser(mockUser)
-  return mockUser
+  try {
+    const auth = getFirebaseAuth()
+    const provider = getGoogleProvider()
+    const result = await signInWithPopup(auth, provider)
+    const firebaseUser = result.user
+
+    if (!firebaseUser) {
+      throw new Error("No se pudo obtener información del usuario")
+    }
+
+    console.log("Login exitoso:", firebaseUser.email)
+
+    // Convertir a nuestro formato
+    const user = mapFirebaseUser(firebaseUser)
+
+    // Guardar en localStorage
+    saveUser(user)
+
+    return user
+  } catch (error: any) {
+    console.error("Error signing in with Google:", error)
+
+    // Manejar errores específicos
+    if (error.code === "auth/popup-closed-by-user") {
+      throw new Error("Login cancelado por el usuario")
+    } else if (error.code === "auth/popup-blocked") {
+      throw new Error("Popup bloqueado por el navegador")
+    } else if (error.code === "auth/network-request-failed") {
+      throw new Error("Error de conexión. Verifica tu internet.")
+    } else {
+      throw new Error(error.message || "Error al iniciar sesión")
+    }
+  }
 }
+
+// Alias para compatibilidad
+export const loginWithGoogle = signInWithGoogle
 
 // Logout
 export async function signOut(): Promise<void> {
-  clearUser()
-  console.log("Logout exitoso")
+  if (typeof window === "undefined") {
+    throw new Error("Sign out can only be performed on the client side")
+  }
+
+  try {
+    const auth = getFirebaseAuth()
+    await firebaseSignOut(auth)
+    clearUser()
+    console.log("Logout exitoso")
+  } catch (error: any) {
+    console.error("Error signing out:", error)
+    // Limpiar usuario aunque haya error en Firebase
+    clearUser()
+    throw new Error(error.message || "Error al cerrar sesión")
+  }
 }
 
-// Listener de cambios de autenticación (simplificado)
+// Listener de cambios de autenticación
 export function onAuthChange(callback: (user: User | null) => void): () => void {
   if (typeof window === "undefined") {
     return () => {}
   }
 
-  // Verificar usuario actual inmediatamente
-  const currentUser = getCurrentUser()
-  callback(currentUser)
-
-  // Retornar función de cleanup vacía
-  return () => {}
+  try {
+    const auth = getFirebaseAuth()
+    return onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const user = mapFirebaseUser(firebaseUser)
+        saveUser(user)
+        callback(user)
+      } else {
+        clearUser()
+        callback(null)
+      }
+    })
+  } catch (error) {
+    console.error("Error setting up auth listener:", error)
+    // Verificar usuario desde localStorage como fallback
+    const currentUser = getCurrentUser()
+    callback(currentUser)
+    return () => {}
+  }
 }
 
 // Funciones para manejar invitaciones pendientes
