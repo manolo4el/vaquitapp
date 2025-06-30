@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Plus, TrendingUp, TrendingDown, CheckCircle, Calendar, Users, LogOut, User } from "lucide-react"
 import { getUserBalance, formatAmount } from "@/lib/expense-calculator"
-import { getUserGroups } from "@/lib/group-storage" // ✅ Usar función específica para usuario
+import { getUserGroupsFirestore } from "@/lib/group-firestore"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { AuthGuard } from "@/components/auth-guard"
@@ -42,11 +42,11 @@ export default function DashboardPage() {
     }
   }, [])
 
-  const loadDashboardData = () => {
+  const loadDashboardData = async () => {
     try {
-      // ✅ Cargar solo grupos del usuario actual (sin datos mock)
-      const userGroups = getUserGroups() // Función que filtra por usuario actual
-      console.log("Grupos del usuario cargados:", userGroups)
+      // Cargar grupos del usuario actual desde Firestore
+      const userGroups = await getUserGroupsFirestore(user!.id)
+      console.log("Grupos del usuario cargados desde Firestore:", userGroups)
 
       // Calcular balances para cada grupo
       const groupsWithBalances = userGroups.map((group) => {
@@ -68,12 +68,11 @@ export default function DashboardPage() {
 
       setGroups(groupsWithBalances)
 
-      // ✅ Calcular deudas consolidadas
-      const consolidated = getConsolidatedDebts()
-      console.log("Deudas consolidadas:", consolidated)
-      setConsolidatedData(consolidated)
+      // (Opcional) Calcular deudas consolidadas si tienes lógica en Firestore
+      // const consolidated = getConsolidatedDebts()
+      // setConsolidatedData(consolidated)
     } catch (error) {
-      console.error("Error al cargar grupos:", error)
+      console.error("Error al cargar grupos desde Firestore:", error)
     } finally {
       setIsLoading(false)
     }

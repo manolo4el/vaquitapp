@@ -71,4 +71,11 @@ export async function migrateLocalGroupsToFirestore() {
     localStorage.removeItem("amigo-gastos-groups")
     localStorage.setItem("amigo-gastos-groups", JSON.stringify([]))
   }
+}
+
+// Obtiene todos los grupos de Firestore donde el usuario es miembro
+export async function getUserGroupsFirestore(userId: string): Promise<Group[]> {
+  const q = query(collection(db, "groups"), where("members", "array-contains", { id: userId }))
+  const snap = await getDocs(q)
+  return snap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Group))
 } 

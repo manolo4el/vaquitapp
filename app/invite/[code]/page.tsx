@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Check, AlertCircle } from "lucide-react"
 import { useState, useEffect } from "react"
-import { getGroupByInviteCode, addMemberToGroup } from "@/lib/group-storage"
+import { getGroupByInviteCodeFirestore, addMemberToGroupFirestore } from "@/lib/group-firestore"
 import { getCurrentUser, setPendingInvite } from "@/lib/auth"
 import type { Group } from "@/lib/group-storage"
 import { getAllGroups } from "@/lib/group-storage"
@@ -25,11 +25,11 @@ export default function InvitePage({ params }: { params: { code: string } }) {
       console.log("=== PROCESANDO INVITACIÓN ===")
       console.log("Código de invitación:", params.code)
 
-      // 1. Buscar el grupo por código de invitación
-      const groupData = getGroupByInviteCode(params.code)
+      // 1. Buscar el grupo por código de invitación en Firestore
+      const groupData = await getGroupByInviteCodeFirestore(params.code)
 
       // ✅ Agregar debugging detallado
-      console.log("Resultado de búsqueda de grupo:", groupData)
+      console.log("Resultado de búsqueda de grupo en Firestore:", groupData)
 
       if (!groupData) {
         // ✅ Debugging adicional para ver todos los grupos disponibles
@@ -82,22 +82,18 @@ export default function InvitePage({ params }: { params: { code: string } }) {
         return
       }
 
-      // 4. Agregar automáticamente al usuario al grupo
-      console.log("➕ Agregando usuario al grupo automáticamente")
+      // 4. Agregar automáticamente al usuario al grupo en Firestore
+      console.log("➕ Agregando usuario al grupo automáticamente en Firestore")
       setIsJoining(true)
 
-      // Simular delay de procesamiento
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      // Agregar el usuario al grupo
-      addMemberToGroup(groupData.id, {
+      await addMemberToGroupFirestore(groupData.id, {
         id: currentUser.id,
         name: currentUser.name,
         avatar: currentUser.avatar,
         alias: currentUser.alias,
       })
 
-      console.log("✅ Usuario agregado exitosamente al grupo")
+      console.log("✅ Usuario agregado exitosamente al grupo en Firestore")
       setHasJoined(true)
 
       // Redirigir al grupo después de 2 segundos
