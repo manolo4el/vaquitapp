@@ -6,18 +6,17 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { VaquitappLogo } from "@/components/vaquitapp-logo"
 import { useAuth } from "@/hooks/use-auth"
-import { loginWithGoogle } from "@/lib/auth"
 import { Users, Calculator, Smartphone, Heart } from "lucide-react"
 
 export default function HomePage() {
-  const { user, loading } = useAuth()
+  const { user, loading, login } = useAuth()
   const router = useRouter()
   const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   const handleGoogleLogin = async () => {
     try {
       setIsLoggingIn(true)
-      await loginWithGoogle()
+      await login()
       router.push("/dashboard")
     } catch (error) {
       console.error("Error logging in:", error)
@@ -41,15 +40,32 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50">
+      {/* Elementos decorativos */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-20 w-32 h-32 bg-green-200 rounded-full opacity-20 animate-pulse"></div>
+        <div
+          className="absolute top-40 right-32 w-24 h-24 bg-yellow-200 rounded-full opacity-30 animate-bounce"
+          style={{ animationDelay: "1s" }}
+        ></div>
+        <div
+          className="absolute bottom-32 left-32 w-20 h-20 bg-orange-200 rounded-full opacity-25 animate-pulse"
+          style={{ animationDelay: "2s" }}
+        ></div>
+        <div
+          className="absolute bottom-20 right-20 w-28 h-28 bg-green-300 rounded-full opacity-20 animate-bounce"
+          style={{ animationDelay: "0.5s" }}
+        ></div>
+      </div>
+
       {/* Header */}
-      <header className="container mx-auto px-4 py-6">
+      <header className="container mx-auto px-4 py-6 relative z-10">
         <div className="flex justify-center">
           <VaquitappLogo size="lg" />
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 relative z-10">
         <div className="max-w-4xl mx-auto">
           {/* Hero Section */}
           <div className="text-center mb-12">
@@ -61,16 +77,16 @@ export default function HomePage() {
             </p>
 
             {/* Google Login Button */}
-            <Card className="max-w-md mx-auto mb-12 shadow-lg border-2 border-green-200">
+            <Card className="max-w-md mx-auto mb-12 shadow-xl border-0 bg-white/80 backdrop-blur-sm">
               <CardHeader className="text-center pb-4">
-                <CardTitle className="text-green-700">¡Empezar es gratis!</CardTitle>
-                <CardDescription>Inicia sesión con tu cuenta de Google</CardDescription>
+                <CardTitle className="text-2xl text-green-700">¡Empezar es gratis!</CardTitle>
+                <CardDescription className="text-base">Inicia sesión con tu cuenta de Google</CardDescription>
               </CardHeader>
               <CardContent>
                 <Button
                   onClick={handleGoogleLogin}
                   disabled={isLoggingIn}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+                  className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                   size="lg"
                 >
                   {isLoggingIn ? (
@@ -108,7 +124,7 @@ export default function HomePage() {
 
           {/* Features Grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-yellow-200 bg-yellow-50">
+            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-yellow-200 bg-yellow-50/80 backdrop-blur-sm">
               <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Users className="w-6 h-6 text-white" />
               </div>
@@ -116,7 +132,7 @@ export default function HomePage() {
               <p className="text-sm text-gray-600">Crea grupos con tus amigos en segundos</p>
             </Card>
 
-            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-green-200 bg-green-50">
+            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-green-200 bg-green-50/80 backdrop-blur-sm">
               <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Calculator className="w-6 h-6 text-white" />
               </div>
@@ -124,7 +140,7 @@ export default function HomePage() {
               <p className="text-sm text-gray-600">Divide gastos automáticamente</p>
             </Card>
 
-            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-orange-200 bg-orange-50">
+            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-orange-200 bg-orange-50/80 backdrop-blur-sm">
               <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Smartphone className="w-6 h-6 text-white" />
               </div>
@@ -132,7 +148,7 @@ export default function HomePage() {
               <p className="text-sm text-gray-600">Úsalo desde cualquier dispositivo</p>
             </Card>
 
-            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-pink-200 bg-pink-50">
+            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-pink-200 bg-pink-50/80 backdrop-blur-sm">
               <div className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Heart className="w-6 h-6 text-white" />
               </div>
@@ -145,12 +161,17 @@ export default function HomePage() {
           <div className="text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-4">¿Listo para simplificar tus gastos?</h2>
             <p className="text-lg text-gray-600 mb-6">Únete a miles de usuarios que ya disfrutan de VaquitApp</p>
+            <div className="flex justify-center gap-4 text-sm text-gray-500">
+              <span>💰 Crea grupos</span>
+              <span>📊 Divide gastos</span>
+              <span>💸 Liquida deudas</span>
+            </div>
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="container mx-auto px-4 py-8 text-center text-gray-500">
+      <footer className="container mx-auto px-4 py-8 text-center text-gray-500 relative z-10">
         <p>&copy; 2024 VaquitApp. Hecho con ❤️ para dividir gastos fácilmente.</p>
       </footer>
     </div>

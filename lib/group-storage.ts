@@ -52,17 +52,40 @@ const STORAGE_KEY = "vaquitapp_groups"
 function getStoredGroups(): Group[] {
   if (typeof window === "undefined") return []
 
-  const stored = localStorage.getItem(STORAGE_KEY)
-  return stored ? JSON.parse(stored) : []
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (!stored) return []
+
+    const groups = JSON.parse(stored)
+    return groups.map((group: any) => ({
+      ...group,
+      createdAt: new Date(group.createdAt),
+      members: group.members.map((member: any) => ({
+        ...member,
+        joinedAt: new Date(member.joinedAt),
+      })),
+      expenses: group.expenses.map((expense: any) => ({
+        ...expense,
+        date: new Date(expense.date),
+      })),
+    }))
+  } catch (error) {
+    console.error("Error getting stored groups:", error)
+    return []
+  }
 }
 
 function saveGroups(groups: Group[]): void {
   if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
+    } catch (error) {
+      console.error("Error saving groups:", error)
+    }
   }
 }
 
-export async function createGroup(name: string, description: string, createdBy: string): Promise<Group> {
+export function createGroup(name: string, description: string, createdBy: string): Group {
   const groups = getStoredGroups()
 
   const newGroup: Group = {
@@ -83,44 +106,45 @@ export async function createGroup(name: string, description: string, createdBy: 
   return newGroup
 }
 
-export async function getUserGroups(userId: string): Promise<Group[]> {
+export function getUserGroups(userId: string): Group[] {
   const groups = getStoredGroups()
   return groups.filter((group) => group.members.some((member) => member.uid === userId) || group.createdBy === userId)
 }
 
-export async function getGroupById(groupId: string): Promise<Group | null> {
+export function getGroupById(groupId: string): Group | null {
   const groups = getStoredGroups()
   return groups.find((group) => group.id === groupId) || null
 }
 
-export async function getGroupByInviteCode(inviteCode: string): Promise<Group | null> {
+export function getGroupByInviteCode(inviteCode: string): Group | null {
   const groups = getStoredGroups()
   return groups.find((group) => group.inviteCode === inviteCode) || null
 }
 
-export async function getAllGroups(): Promise<Group[]> {
+export function getAllGroups(): Group[] {
   return getStoredGroups()
 }
 
-export async function addMemberToGroup(groupId: string, member: GroupMember): Promise<void> {
+export function addMemberToGroup(groupId: string, member: GroupMember): boolean {
   const groups = getStoredGroups()
   const groupIndex = groups.findIndex((group) => group.id === groupId)
 
   if (groupIndex === -1) {
-    throw new Error("Group not found")
+    return false
   }
 
   // Check if member already exists
   const existingMember = groups[groupIndex].members.find((m) => m.uid === member.uid)
   if (existingMember) {
-    throw new Error("Member already in group")
+    return false
   }
 
   groups[groupIndex].members.push(member)
   saveGroups(groups)
+  return true
 }
 
-export async function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id">): Promise<Expense> {
+export function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id">): Expense {
   const groups = getStoredGroups()
   const groupIndex = groups.findIndex((group) => group.id === groupId)
 
@@ -139,17 +163,17 @@ export async function addExpenseToGroup(groupId: string, expense: Omit<Expense, 
   return newExpense
 }
 
-export async function updateExpense(groupId: string, expenseId: string, updates: Partial<Expense>): Promise<void> {
+export function updateExpense(groupId: string, expenseId: string, updates: Partial<Expense>): boolean {
   const groups = getStoredGroups()
   const groupIndex = groups.findIndex((group) => group.id === groupId)
 
   if (groupIndex === -1) {
-    throw new Error("Group not found")
+    return false
   }
 
   const expenseIndex = groups[groupIndex].expenses.findIndex((expense) => expense.id === expenseId)
   if (expenseIndex === -1) {
-    throw new Error("Expense not found")
+    return false
   }
 
   groups[groupIndex].expenses[expenseIndex] = {
@@ -158,49 +182,54 @@ export async function updateExpense(groupId: string, expenseId: string, updates:
   }
 
   saveGroups(groups)
+  return true
 }
 
-export async function deleteExpense(groupId: string, expenseId: string): Promise<void> {
+export function deleteExpense(groupId: string, expenseId: string): boolean {
   const groups = getStoredGroups()
   const groupIndex = groups.findIndex((group) => group.id === groupId)
 
   if (groupIndex === -1) {
-    throw new Error("Group not found")
+    return false
   }
 
   groups[groupIndex].expenses = groups[groupIndex].expenses.filter((expense) => expense.id !== expenseId)
   saveGroups(groups)
+  return true
 }
 
-export async function markTransferAsCompleted(
+export function markTransferAsCompleted(
   groupId: string,
   fromUserId: string,
   toUserId: string,
   amount: number,
-): Promise<void> {
+): boolean {
   // Mock implementation - in real app this would update the database
   console.log(`Transfer marked as completed: ${fromUserId} -> ${toUserId}: $${amount}`)
+  return true
 }
 
-export async function markMultiGroupTransferAsCompleted(
+export function markMultiGroupTransferAsCompleted(
   transfers: Array<{ groupId: string; fromUserId: string; toUserId: string; amount: number }>,
-): Promise<void> {
+): boolean {
   // Mock implementation
   console.log("Multi-group transfers marked as completed:", transfers)
+  return true
 }
 
-export async function addMessageToGroup(groupId: string, message: Omit<GroupMessage, "id">): Promise<void> {
+export function addMessageToGroup(groupId: string, message: Omit<GroupMessage, "id">): boolean {
   // Mock implementation
   console.log("Message added to group:", groupId, message)
+  return true
 }
 
-export async function getGroupMessages(groupId: string): Promise<GroupMessage[]> {
+export function getGroupMessages(groupId: string): GroupMessage[] {
   // Mock implementation
   return []
 }
 
-export async function isUserMemberOfGroup(userId: string, groupId: string): Promise<boolean> {
-  const group = await getGroupById(groupId)
+export function isUserMemberOfGroup(userId: string, groupId: string): boolean {
+  const group = getGroupById(groupId)
   if (!group) return false
 
   return group.members.some((member) => member.uid === userId) || group.createdBy === userId

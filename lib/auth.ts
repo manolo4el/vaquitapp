@@ -3,7 +3,6 @@ export interface User {
   email: string
   displayName?: string
   photoURL?: string
-  alias?: string
 }
 
 export interface PendingInvite {
@@ -12,22 +11,22 @@ export interface PendingInvite {
   groupName: string
 }
 
+// Mock user storage
+const MOCK_USER_KEY = "vaquitapp_mock_user"
+const PENDING_INVITE_KEY = "vaquitapp_pending_invite"
+
 // Mock authentication functions
 export async function loginWithGoogle(): Promise<User> {
-  // Simulate login delay
-  await new Promise((resolve) => setTimeout(resolve, 1000))
-
+  // Simulate Google login
   const mockUser: User = {
     uid: "mock-user-" + Date.now(),
     email: "usuario@ejemplo.com",
-    displayName: "Usuario de Prueba",
-    photoURL: "/placeholder-user.jpg",
-    alias: "usuario",
+    displayName: "Usuario Demo",
+    photoURL: "https://via.placeholder.com/150",
   }
 
-  // Store in localStorage
   if (typeof window !== "undefined") {
-    localStorage.setItem("currentUser", JSON.stringify(mockUser))
+    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(mockUser))
   }
 
   return mockUser
@@ -35,58 +34,47 @@ export async function loginWithGoogle(): Promise<User> {
 
 export async function logout(): Promise<void> {
   if (typeof window !== "undefined") {
-    localStorage.removeItem("currentUser")
-    localStorage.removeItem("pendingInvite")
+    localStorage.removeItem(MOCK_USER_KEY)
   }
 }
 
 export function getCurrentUser(): User | null {
   if (typeof window === "undefined") return null
 
-  const stored = localStorage.getItem("currentUser")
+  const stored = localStorage.getItem(MOCK_USER_KEY)
   return stored ? JSON.parse(stored) : null
 }
 
 export function onAuthStateChanged(callback: (user: User | null) => void): () => void {
-  // Check initial state
+  // Mock auth state listener
   const user = getCurrentUser()
   callback(user)
 
-  // Listen for storage changes
-  const handleStorageChange = (e: StorageEvent) => {
-    if (e.key === "currentUser") {
-      const user = e.newValue ? JSON.parse(e.newValue) : null
-      callback(user)
-    }
-  }
-
-  if (typeof window !== "undefined") {
-    window.addEventListener("storage", handleStorageChange)
-    return () => window.removeEventListener("storage", handleStorageChange)
-  }
-
+  // Return unsubscribe function
   return () => {}
+}
+
+// Pending invite functions
+export function setPendingInvite(invite: PendingInvite): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(PENDING_INVITE_KEY, JSON.stringify(invite))
+  }
 }
 
 export function getPendingInvite(): PendingInvite | null {
   if (typeof window === "undefined") return null
 
-  const stored = localStorage.getItem("pendingInvite")
+  const stored = localStorage.getItem(PENDING_INVITE_KEY)
   return stored ? JSON.parse(stored) : null
-}
-
-export function setPendingInvite(invite: PendingInvite): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("pendingInvite", JSON.stringify(invite))
-  }
 }
 
 export function clearPendingInvite(): void {
   if (typeof window !== "undefined") {
-    localStorage.removeItem("pendingInvite")
+    localStorage.removeItem(PENDING_INVITE_KEY)
   }
 }
 
+// User profile functions
 export async function updateUserProfile(updates: Partial<User>): Promise<void> {
   const currentUser = getCurrentUser()
   if (!currentUser) throw new Error("No user logged in")
@@ -94,13 +82,14 @@ export async function updateUserProfile(updates: Partial<User>): Promise<void> {
   const updatedUser = { ...currentUser, ...updates }
 
   if (typeof window !== "undefined") {
-    localStorage.setItem("currentUser", JSON.stringify(updatedUser))
+    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(updatedUser))
   }
 }
 
+// Alias validation
 export function validateAlias(alias: string): { isValid: boolean; error?: string } {
   if (!alias || alias.trim().length === 0) {
-    return { isValid: false, error: "El alias es requerido" }
+    return { isValid: false, error: "El alias no puede estar vacío" }
   }
 
   if (alias.length < 2) {
@@ -111,8 +100,8 @@ export function validateAlias(alias: string): { isValid: boolean; error?: string
     return { isValid: false, error: "El alias no puede tener más de 20 caracteres" }
   }
 
-  if (!/^[a-zA-Z0-9_-]+$/.test(alias)) {
-    return { isValid: false, error: "El alias solo puede contener letras, números, guiones y guiones bajos" }
+  if (!/^[a-zA-Z0-9\s]+$/.test(alias)) {
+    return { isValid: false, error: "El alias solo puede contener letras, números y espacios" }
   }
 
   return { isValid: true }

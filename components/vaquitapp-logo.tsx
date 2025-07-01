@@ -1,34 +1,37 @@
 import Image from "next/image"
+import { cn } from "@/lib/utils"
 
 interface VaquitappLogoProps {
-  size?: "sm" | "md" | "lg"
-  showText?: boolean
+  size?: "sm" | "md" | "lg" | "xl" | number
   className?: string
 }
 
-export function VaquitappLogo({ size = "md", showText = true, className = "" }: VaquitappLogoProps) {
-  const sizeClasses = {
-    sm: "w-8 h-8",
-    md: "w-12 h-12",
-    lg: "w-16 h-16",
+export function VaquitappLogo({ size = "md", className }: VaquitappLogoProps) {
+  const getSize = () => {
+    if (typeof size === "number") return size
+
+    switch (size) {
+      case "sm":
+        return 32
+      case "md":
+        return 48
+      case "lg":
+        return 64
+      case "xl":
+        return 80
+      default:
+        return 48
+    }
   }
 
-  const textSizeClasses = {
-    sm: "text-lg",
-    md: "text-2xl",
-    lg: "text-3xl",
-  }
+  const logoSize = getSize()
 
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
-      <Image
-        src="/vaquitapp-icon.svg"
-        alt="VaquitApp"
-        width={size === "sm" ? 32 : size === "md" ? 48 : 64}
-        height={size === "sm" ? 32 : size === "md" ? 48 : 64}
-        className={sizeClasses[size]}
-      />
-      {showText && <span className={`font-bold text-green-700 ${textSizeClasses[size]}`}>VaquitApp</span>}
+    <div className={cn("flex items-center gap-2", className)}>
+      <Image src="/vaquitapp-icon.svg" alt="VaquitApp" width={logoSize} height={logoSize} className="flex-shrink-0" />
+      <span className="font-bold text-green-700" style={{ fontSize: `${logoSize * 0.4}px` }}>
+        VaquitApp
+      </span>
     </div>
   )
 }

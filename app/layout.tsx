@@ -7,8 +7,8 @@ import { AuthProvider } from "@/hooks/use-auth"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "VaquitApp - Gestión de Gastos Compartidos",
-  description: "Administra gastos compartidos con amigos de forma fácil y transparente",
+  title: "VaquitApp - Divide gastos con amigos",
+  description: "La forma más fácil de dividir gastos compartidos con tus amigos",
     generator: 'v0.dev'
 }
 
