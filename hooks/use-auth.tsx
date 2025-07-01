@@ -1,13 +1,13 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { onAuthChange, loginWithGoogle, signOut, getCurrentUser, type AuthUser } from "@/lib/auth"
+import { loginWithGoogle, logout, onAuthStateChange, type AuthUser } from "@/lib/auth"
 
 interface AuthContextType {
   user: AuthUser | null
   loading: boolean
-  signIn: () => Promise<void>
-  signOut: () => Promise<void>
+  login: () => Promise<void>
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -17,55 +17,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check for existing user immediately
-    const currentUser = getCurrentUser()
-    if (currentUser) {
-      setUser(currentUser)
-      setLoading(false)
-    }
-
-    // Set up auth state listener
-    const unsubscribe = onAuthChange((authUser) => {
-      setUser(authUser)
+    const unsubscribe = onAuthStateChange((user) => {
+      setUser(user)
       setLoading(false)
     })
 
-    // Fallback to stop loading after 1 second
-    const fallbackTimer = setTimeout(() => {
-      setLoading(false)
-    }, 1000)
-
-    return () => {
-      unsubscribe()
-      clearTimeout(fallbackTimer)
-    }
+    return unsubscribe
   }, [])
 
-  const signIn = async () => {
+  const handleLogin = async () => {
     try {
-      const authUser = await loginWithGoogle()
-      setUser(authUser)
+      setLoading(true)
+      const user = await loginWithGoogle()
+      setUser(user)
     } catch (error) {
-      console.error("Error signing in:", error)
-      throw error
+      console.error("Error logging in:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleSignOut = async () => {
+  const handleLogout = async () => {
     try {
-      await signOut()
+      setLoading(true)
+      await logout()
       setUser(null)
     } catch (error) {
-      console.error("Error signing out:", error)
-      throw error
+      console.error("Error logging out:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
   const value = {
     user,
     loading,
-    signIn,
-    signOut: handleSignOut,
+    login: handleLogin,
+    logout: handleLogout,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
