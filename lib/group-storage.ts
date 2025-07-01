@@ -1,22 +1,10 @@
-export interface Group {
+export interface Member {
   id: string
   name: string
-  description?: string
-  members: GroupMember[]
-  expenses: Expense[]
-  createdAt: Date
-  createdBy: string
-  inviteCode: string
-  currency: string
-}
-
-export interface GroupMember {
-  uid: string
   email: string
-  displayName?: string
-  alias: string
-  joinedAt: Date
-  isActive: boolean
+  avatar?: string
+  alias?: string
+  joinedAt: string
 }
 
 export interface Expense {
@@ -25,212 +13,165 @@ export interface Expense {
   amount: number
   paidBy: string
   splitBetween: string[]
-  date: Date
+  date: string
   category?: string
   receipt?: string
 }
 
-export interface Debt {
-  from: string
-  to: string
-  amount: number
-}
-
-export interface GroupMessage {
+export interface Group {
   id: string
-  groupId: string
-  userId: string
-  userName: string
-  message: string
-  timestamp: Date
-  type: "expense" | "payment" | "system"
+  name: string
+  description?: string
+  members: Member[]
+  expenses: Expense[]
+  createdAt: string
+  createdBy: string
+  inviteCode: string
 }
 
-// Mock storage functions
-const STORAGE_KEY = "vaquitapp_groups"
+// Mock storage
+let groups: Group[] = []
 
-function getStoredGroups(): Group[] {
-  if (typeof window === "undefined") return []
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return []
-
-    const groups = JSON.parse(stored)
-    return groups.map((group: any) => ({
-      ...group,
-      createdAt: new Date(group.createdAt),
-      members: group.members.map((member: any) => ({
-        ...member,
-        joinedAt: new Date(member.joinedAt),
-      })),
-      expenses: group.expenses.map((expense: any) => ({
-        ...expense,
-        date: new Date(expense.date),
-      })),
-    }))
-  } catch (error) {
-    console.error("Error getting stored groups:", error)
-    return []
-  }
-}
-
-function saveGroups(groups: Group[]): void {
+export function getAllGroups(): Group[] {
   if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-    } catch (error) {
-      console.error("Error saving groups:", error)
+    const stored = localStorage.getItem("vaquitapp-groups")
+    if (stored) {
+      try {
+        groups = JSON.parse(stored)
+      } catch {
+        groups = []
+      }
     }
   }
+  return groups
 }
 
-export function createGroup(name: string, description: string, createdBy: string): Group {
-  const groups = getStoredGroups()
+export function getUserGroups(): Group[] {
+  const allGroups = getAllGroups()
+  const currentUser = getCurrentUser()
+  if (!currentUser) return []
 
-  const newGroup: Group = {
-    id: "group-" + Date.now(),
-    name,
-    description,
-    members: [],
-    expenses: [],
-    createdAt: new Date(),
-    createdBy,
-    inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
-    currency: "USD",
-  }
-
-  groups.push(newGroup)
-  saveGroups(groups)
-
-  return newGroup
+  return allGroups.filter((group) => group.members.some((member) => member.id === currentUser.id))
 }
 
-export function getUserGroups(userId: string): Group[] {
-  const groups = getStoredGroups()
-  return groups.filter((group) => group.members.some((member) => member.uid === userId) || group.createdBy === userId)
-}
-
-export function getGroupById(groupId: string): Group | null {
-  const groups = getStoredGroups()
-  return groups.find((group) => group.id === groupId) || null
+export function getGroupById(id: string): Group | null {
+  const allGroups = getAllGroups()
+  return allGroups.find((group) => group.id === id) || null
 }
 
 export function getGroupByInviteCode(inviteCode: string): Group | null {
-  const groups = getStoredGroups()
-  return groups.find((group) => group.inviteCode === inviteCode) || null
+  const allGroups = getAllGroups()
+  return allGroups.find((group) => group.inviteCode === inviteCode) || null
 }
 
-export function getAllGroups(): Group[] {
-  return getStoredGroups()
-}
+export function createGroup(name: string, description?: string): Group {
+  const currentUser = getCurrentUser()
+  if (!currentUser) throw new Error("No user logged in")
 
-export function addMemberToGroup(groupId: string, member: GroupMember): boolean {
-  const groups = getStoredGroups()
-  const groupIndex = groups.findIndex((group) => group.id === groupId)
-
-  if (groupIndex === -1) {
-    return false
+  const group: Group = {
+    id: `group-${Date.now()}`,
+    name,
+    description,
+    members: [
+      {
+        id: currentUser.id,
+        name: currentUser.name,
+        email: currentUser.email,
+        avatar: currentUser.avatar,
+        alias: currentUser.alias,
+        joinedAt: new Date().toISOString(),
+      },
+    ],
+    expenses: [],
+    createdAt: new Date().toISOString(),
+    createdBy: currentUser.id,
+    inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
   }
+
+  groups.push(group)
+  saveGroups()
+
+  return group
+}
+
+export function addMemberToGroup(groupId: string, member: Member): Group {
+  const group = getGroupById(groupId)
+  if (!group) throw new Error("Group not found")
 
   // Check if member already exists
-  const existingMember = groups[groupIndex].members.find((m) => m.uid === member.uid)
-  if (existingMember) {
-    return false
+  if (group.members.some((m) => m.id === member.id)) {
+    throw new Error("Member already in group")
   }
 
-  groups[groupIndex].members.push(member)
-  saveGroups(groups)
-  return true
+  group.members.push({
+    ...member,
+    joinedAt: new Date().toISOString(),
+  })
+
+  saveGroups()
+  return group
 }
 
-export function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id">): Expense {
-  const groups = getStoredGroups()
-  const groupIndex = groups.findIndex((group) => group.id === groupId)
-
-  if (groupIndex === -1) {
-    throw new Error("Group not found")
-  }
+export function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id">): Group {
+  const group = getGroupById(groupId)
+  if (!group) throw new Error("Group not found")
 
   const newExpense: Expense = {
     ...expense,
-    id: "expense-" + Date.now(),
+    id: `expense-${Date.now()}`,
+    date: expense.date || new Date().toISOString(),
   }
 
-  groups[groupIndex].expenses.push(newExpense)
-  saveGroups(groups)
+  group.expenses.push(newExpense)
+  saveGroups()
 
-  return newExpense
+  return group
 }
 
-export function updateExpense(groupId: string, expenseId: string, updates: Partial<Expense>): boolean {
-  const groups = getStoredGroups()
-  const groupIndex = groups.findIndex((group) => group.id === groupId)
-
-  if (groupIndex === -1) {
-    return false
+function saveGroups(): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("vaquitapp-groups", JSON.stringify(groups))
   }
-
-  const expenseIndex = groups[groupIndex].expenses.findIndex((expense) => expense.id === expenseId)
-  if (expenseIndex === -1) {
-    return false
-  }
-
-  groups[groupIndex].expenses[expenseIndex] = {
-    ...groups[groupIndex].expenses[expenseIndex],
-    ...updates,
-  }
-
-  saveGroups(groups)
-  return true
 }
 
-export function deleteExpense(groupId: string, expenseId: string): boolean {
-  const groups = getStoredGroups()
-  const groupIndex = groups.findIndex((group) => group.id === groupId)
-
-  if (groupIndex === -1) {
-    return false
+function getCurrentUser() {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("vaquitapp-user")
+    if (stored) {
+      try {
+        return JSON.parse(stored)
+      } catch {
+        return null
+      }
+    }
   }
-
-  groups[groupIndex].expenses = groups[groupIndex].expenses.filter((expense) => expense.id !== expenseId)
-  saveGroups(groups)
-  return true
+  return null
 }
 
-export function markTransferAsCompleted(
-  groupId: string,
-  fromUserId: string,
-  toUserId: string,
-  amount: number,
-): boolean {
-  // Mock implementation - in real app this would update the database
+// Additional utility functions
+export function markTransferAsCompleted(fromUserId: string, toUserId: string, amount: number): void {
+  // Mock implementation
   console.log(`Transfer marked as completed: ${fromUserId} -> ${toUserId}: $${amount}`)
-  return true
 }
 
-export function markMultiGroupTransferAsCompleted(
-  transfers: Array<{ groupId: string; fromUserId: string; toUserId: string; amount: number }>,
-): boolean {
+export function markMultiGroupTransferAsCompleted(transfers: any[]): void {
   // Mock implementation
   console.log("Multi-group transfers marked as completed:", transfers)
-  return true
 }
 
-export function addMessageToGroup(groupId: string, message: Omit<GroupMessage, "id">): boolean {
+export function addMessageToGroup(groupId: string, message: string): void {
   // Mock implementation
-  console.log("Message added to group:", groupId, message)
-  return true
+  console.log(`Message added to group ${groupId}:`, message)
 }
 
-export function getGroupMessages(groupId: string): GroupMessage[] {
+export function getGroupMessages(groupId: string): any[] {
   // Mock implementation
   return []
 }
 
-export function isUserMemberOfGroup(userId: string, groupId: string): boolean {
+export function isUserMemberOfGroup(groupId: string, userId: string): boolean {
   const group = getGroupById(groupId)
   if (!group) return false
 
-  return group.members.some((member) => member.uid === userId) || group.createdBy === userId
+  return group.members.some((member) => member.id === userId)
 }

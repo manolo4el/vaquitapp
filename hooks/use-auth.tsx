@@ -1,9 +1,14 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
-import { type User, onAuthStateChanged, loginWithGoogle as authLogin, logout as authLogout } from "@/lib/auth"
+import {
+  type User,
+  onAuthStateChanged,
+  loginWithGoogle as authLogin,
+  logout as authLogout,
+  getCurrentUser,
+} from "@/lib/auth"
 
 interface AuthContextType {
   user: User | null
@@ -19,12 +24,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Get initial user immediately
+    const initialUser = getCurrentUser()
+    if (initialUser) {
+      setUser(initialUser)
+      setLoading(false)
+    }
+
+    // Set up auth state listener
     const unsubscribe = onAuthStateChanged((user) => {
       setUser(user)
       setLoading(false)
     })
 
-    return unsubscribe
+    // Fallback to stop loading after 1 second
+    const fallbackTimer = setTimeout(() => {
+      setLoading(false)
+    }, 1000)
+
+    return () => {
+      unsubscribe()
+      clearTimeout(fallbackTimer)
+    }
   }, [])
 
   const login = async () => {
@@ -53,7 +74,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>
+  const value = {
+    user,
+    loading,
+    login,
+    logout,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

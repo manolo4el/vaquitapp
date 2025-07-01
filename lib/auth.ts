@@ -1,108 +1,109 @@
 export interface User {
-  uid: string
+  id: string
+  name: string
   email: string
-  displayName?: string
-  photoURL?: string
+  avatar?: string
+  alias?: string
 }
 
-export interface PendingInvite {
-  groupId: string
-  inviteCode: string
-  groupName: string
+// Mock authentication system
+let currentUser: User | null = null
+let authListeners: ((user: User | null) => void)[] = []
+
+export function onAuthStateChanged(callback: (user: User | null) => void) {
+  authListeners.push(callback)
+
+  // Immediately call with current user
+  setTimeout(() => callback(currentUser), 0)
+
+  return () => {
+    authListeners = authListeners.filter((listener) => listener !== callback)
+  }
 }
 
-// Mock user storage
-const MOCK_USER_KEY = "vaquitapp_mock_user"
-const PENDING_INVITE_KEY = "vaquitapp_pending_invite"
-
-// Mock authentication functions
 export async function loginWithGoogle(): Promise<User> {
-  // Simulate Google login
+  // Mock Google login
   const mockUser: User = {
-    uid: "mock-user-" + Date.now(),
-    email: "usuario@ejemplo.com",
-    displayName: "Usuario Demo",
-    photoURL: "https://via.placeholder.com/150",
+    id: "mock-user-id",
+    name: "Usuario Demo",
+    email: "demo@vaquitapp.com",
+    avatar: "/placeholder.svg?height=40&width=40&text=U",
   }
 
+  currentUser = mockUser
+
+  // Store in localStorage
   if (typeof window !== "undefined") {
-    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(mockUser))
+    localStorage.setItem("vaquitapp-user", JSON.stringify(mockUser))
   }
+
+  // Notify listeners
+  authListeners.forEach((listener) => listener(mockUser))
 
   return mockUser
 }
 
 export async function logout(): Promise<void> {
+  currentUser = null
+
   if (typeof window !== "undefined") {
-    localStorage.removeItem(MOCK_USER_KEY)
+    localStorage.removeItem("vaquitapp-user")
   }
+
+  // Notify listeners
+  authListeners.forEach((listener) => listener(null))
 }
 
 export function getCurrentUser(): User | null {
-  if (typeof window === "undefined") return null
-
-  const stored = localStorage.getItem(MOCK_USER_KEY)
-  return stored ? JSON.parse(stored) : null
-}
-
-export function onAuthStateChanged(callback: (user: User | null) => void): () => void {
-  // Mock auth state listener
-  const user = getCurrentUser()
-  callback(user)
-
-  // Return unsubscribe function
-  return () => {}
-}
-
-// Pending invite functions
-export function setPendingInvite(invite: PendingInvite): void {
   if (typeof window !== "undefined") {
-    localStorage.setItem(PENDING_INVITE_KEY, JSON.stringify(invite))
+    const stored = localStorage.getItem("vaquitapp-user")
+    if (stored) {
+      try {
+        currentUser = JSON.parse(stored)
+        return currentUser
+      } catch {
+        localStorage.removeItem("vaquitapp-user")
+      }
+    }
   }
+  return currentUser
 }
 
-export function getPendingInvite(): PendingInvite | null {
-  if (typeof window === "undefined") return null
-
-  const stored = localStorage.getItem(PENDING_INVITE_KEY)
-  return stored ? JSON.parse(stored) : null
+// Additional required exports
+export function getPendingInvite(): string | null {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("pending-invite")
+  }
+  return null
 }
 
 export function clearPendingInvite(): void {
   if (typeof window !== "undefined") {
-    localStorage.removeItem(PENDING_INVITE_KEY)
+    localStorage.removeItem("pending-invite")
   }
 }
 
-// User profile functions
-export async function updateUserProfile(updates: Partial<User>): Promise<void> {
-  const currentUser = getCurrentUser()
+export function setPendingInvite(inviteCode: string): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("pending-invite", inviteCode)
+  }
+}
+
+export async function updateUserProfile(updates: Partial<User>): Promise<User> {
   if (!currentUser) throw new Error("No user logged in")
 
-  const updatedUser = { ...currentUser, ...updates }
+  currentUser = { ...currentUser, ...updates }
 
   if (typeof window !== "undefined") {
-    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(updatedUser))
+    localStorage.setItem("vaquitapp-user", JSON.stringify(currentUser))
   }
+
+  // Notify listeners
+  authListeners.forEach((listener) => listener(currentUser))
+
+  return currentUser
 }
 
-// Alias validation
-export function validateAlias(alias: string): { isValid: boolean; error?: string } {
-  if (!alias || alias.trim().length === 0) {
-    return { isValid: false, error: "El alias no puede estar vacío" }
-  }
-
-  if (alias.length < 2) {
-    return { isValid: false, error: "El alias debe tener al menos 2 caracteres" }
-  }
-
-  if (alias.length > 20) {
-    return { isValid: false, error: "El alias no puede tener más de 20 caracteres" }
-  }
-
-  if (!/^[a-zA-Z0-9\s]+$/.test(alias)) {
-    return { isValid: false, error: "El alias solo puede contener letras, números y espacios" }
-  }
-
-  return { isValid: true }
+export function validateAlias(alias: string): boolean {
+  return alias.length >= 2 && alias.length <= 20 && /^[a-zA-Z0-9_]+$/.test(alias)
 }
