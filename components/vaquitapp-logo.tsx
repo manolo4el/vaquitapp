@@ -8,10 +8,10 @@ interface VaquitappLogoProps {
 
 export function VaquitappLogo({ size = "md", showText = true, className = "" }: VaquitappLogoProps) {
   const sizeClasses = {
-    sm: "h-6 w-6",
-    md: "h-8 w-8",
-    lg: "h-12 w-12",
-    xl: "h-16 w-16",
+    sm: "w-6 h-6",
+    md: "w-8 h-8",
+    lg: "w-12 h-12",
+    xl: "w-16 h-16",
   }
 
   const textSizeClasses = {
@@ -28,7 +28,7 @@ export function VaquitappLogo({ size = "md", showText = true, className = "" }: 
         alt="VaquitApp Logo"
         width={size === "xl" ? 64 : size === "lg" ? 48 : size === "md" ? 32 : 24}
         height={size === "xl" ? 64 : size === "lg" ? 48 : size === "md" ? 32 : 24}
-        className={`${sizeClasses[size]} object-contain`}
+        className={sizeClasses[size]}
       />
       {showText && <span className={`font-bold text-green-600 ${textSizeClasses[size]}`}>VaquitApp</span>}
     </div>

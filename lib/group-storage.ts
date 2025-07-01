@@ -233,6 +233,46 @@ export function addExpenseToGroup(groupId: string, expense: Omit<Expense, "id" |
   return newExpense
 }
 
+// Add member to group function
+export function addMemberToGroup(groupId: string, member: Omit<GroupMember, "joinedAt" | "isActive">): boolean {
+  const groups = getStoredGroups()
+  const groupIndex = groups.findIndex((group) => group.id === groupId)
+
+  if (groupIndex === -1) return false
+
+  const group = groups[groupIndex]
+
+  // Check if user is already a member
+  const existingMember = group.members.find((m) => m.id === member.id)
+  if (existingMember) {
+    if (!existingMember.isActive) {
+      existingMember.isActive = true
+      existingMember.joinedAt = new Date()
+    }
+    return true
+  }
+
+  // Add new member
+  const newMember: GroupMember = {
+    ...member,
+    joinedAt: new Date(),
+    isActive: true,
+  }
+
+  group.members.push(newMember)
+
+  // Add system message
+  group.messages.push({
+    id: generateId(),
+    type: "member_joined",
+    content: `${member.name} se unió al grupo`,
+    timestamp: new Date(),
+  })
+
+  saveGroups(groups)
+  return true
+}
+
 // Group management functions
 export function createGroup(
   name: string,

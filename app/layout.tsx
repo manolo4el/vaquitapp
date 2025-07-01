@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "VaquitApp - Gestión de Gastos Compartidos",
-  description: "Administra gastos compartidos con amigos de manera fácil y transparente",
+  description: "Administra gastos compartidos con amigos de forma fácil y transparente",
     generator: 'v0.dev'
 }
 
