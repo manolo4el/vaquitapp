@@ -24,11 +24,6 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 142.1 76.2% 36.3%;
     --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
   }
 
   .dark {
@@ -51,11 +46,6 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 142.4 71.8% 29.2%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
   }
 }
 
@@ -69,19 +59,18 @@
 }
 
 /* Custom animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
+@keyframes bounce-gentle {
+  0%,
+  100% {
     transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
   }
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.5s ease-out;
+.animate-bounce-gentle {
+  animation: bounce-gentle 2s infinite;
 }
 
 /* Gradient backgrounds */
@@ -97,20 +86,15 @@
   background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
+/* Custom shadows */
+.shadow-green {
+  box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.39);
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
+.shadow-yellow {
+  box-shadow: 0 4px 14px 0 rgba(245, 158, 11, 0.39);
 }
 
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+.shadow-orange {
+  box-shadow: 0 4px 14px 0 rgba(249, 115, 22, 0.39);
 }

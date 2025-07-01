@@ -5,39 +5,38 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { VaquitappLogo } from "@/components/vaquitapp-logo"
-import { loginWithGoogle } from "@/lib/auth"
 import { useAuth } from "@/hooks/use-auth"
-import { Loader2, Users, Calculator, Share2, Shield } from "lucide-react"
+import { loginWithGoogle } from "@/lib/auth"
+import { Users, Calculator, Smartphone, Heart } from "lucide-react"
 
 export default function HomePage() {
-  const [isLoading, setIsLoading] = useState(false)
   const { user, loading } = useAuth()
   const router = useRouter()
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   const handleGoogleLogin = async () => {
     try {
-      setIsLoading(true)
+      setIsLoggingIn(true)
       await loginWithGoogle()
       router.push("/dashboard")
     } catch (error) {
-      console.error("Error al iniciar sesión:", error)
+      console.error("Error logging in:", error)
     } finally {
-      setIsLoading(false)
+      setIsLoggingIn(false)
     }
-  }
-
-  // Redirect if already logged in
-  if (user && !loading) {
-    router.push("/dashboard")
-    return null
   }
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-yellow-50 to-orange-50">
-        <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     )
+  }
+
+  if (user) {
+    router.push("/dashboard")
+    return null
   }
 
   return (
@@ -54,37 +53,34 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto">
           {/* Hero Section */}
           <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-              Gestiona gastos compartidos
-              <span className="block text-green-600">de forma simple</span>
+            <h1 className="text-4xl md:text-6xl font-bold text-gray-800 mb-6">
+              Divide gastos con <span className="text-green-600">amigos</span>
             </h1>
-            <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-              Divide gastos con amigos, lleva el control de quién debe qué, y liquida cuentas fácilmente.
+            <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-2xl mx-auto">
+              La forma más fácil y divertida de gestionar gastos compartidos
             </p>
 
-            {/* Login Button */}
-            <Card className="max-w-md mx-auto mb-12 shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl text-gray-900">¡Empezá ahora!</CardTitle>
-                <CardDescription>
-                  Iniciá sesión con Google para comenzar a gestionar tus gastos compartidos
-                </CardDescription>
+            {/* Google Login Button */}
+            <Card className="max-w-md mx-auto mb-12 shadow-lg border-2 border-green-200">
+              <CardHeader className="text-center pb-4">
+                <CardTitle className="text-green-700">¡Empezar es gratis!</CardTitle>
+                <CardDescription>Inicia sesión con tu cuenta de Google</CardDescription>
               </CardHeader>
               <CardContent>
                 <Button
                   onClick={handleGoogleLogin}
-                  disabled={isLoading}
+                  disabled={isLoggingIn}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200"
                   size="lg"
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
                 >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  {isLoggingIn ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                       Iniciando sesión...
-                    </>
+                    </div>
                   ) : (
-                    <>
-                      <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-3">
+                      <svg className="w-5 h-5" viewBox="0 0 24 24">
                         <path
                           fill="currentColor"
                           d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -103,7 +99,7 @@ export default function HomePage() {
                         />
                       </svg>
                       Continuar con Google
-                    </>
+                    </div>
                   )}
                 </Button>
               </CardContent>
@@ -112,66 +108,50 @@ export default function HomePage() {
 
           {/* Features Grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            <Card className="text-center p-6 bg-white/60 backdrop-blur-sm border-0 shadow-md hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="h-6 w-6 text-green-600" />
+            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-yellow-200 bg-yellow-50">
+              <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Grupos</h3>
-              <p className="text-sm text-gray-600">Creá grupos para diferentes ocasiones y agregá a tus amigos</p>
+              <h3 className="font-semibold text-gray-800 mb-2">Grupos Fáciles</h3>
+              <p className="text-sm text-gray-600">Crea grupos con tus amigos en segundos</p>
             </Card>
 
-            <Card className="text-center p-6 bg-white/60 backdrop-blur-sm border-0 shadow-md hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Calculator className="h-6 w-6 text-yellow-600" />
+            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-green-200 bg-green-50">
+              <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Calculator className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Gastos</h3>
-              <p className="text-sm text-gray-600">Registrá gastos y dividí automáticamente entre los participantes</p>
+              <h3 className="font-semibold text-gray-800 mb-2">Cálculo Automático</h3>
+              <p className="text-sm text-gray-600">Divide gastos automáticamente</p>
             </Card>
 
-            <Card className="text-center p-6 bg-white/60 backdrop-blur-sm border-0 shadow-md hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Share2 className="h-6 w-6 text-orange-600" />
+            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-orange-200 bg-orange-50">
+              <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Smartphone className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Compartir</h3>
-              <p className="text-sm text-gray-600">Invitá amigos con códigos únicos y mantené todo sincronizado</p>
+              <h3 className="font-semibold text-gray-800 mb-2">Móvil Friendly</h3>
+              <p className="text-sm text-gray-600">Úsalo desde cualquier dispositivo</p>
             </Card>
 
-            <Card className="text-center p-6 bg-white/60 backdrop-blur-sm border-0 shadow-md hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="h-6 w-6 text-green-600" />
+            <Card className="text-center p-6 hover:shadow-lg transition-shadow border-pink-200 bg-pink-50">
+              <div className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Heart className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Seguro</h3>
-              <p className="text-sm text-gray-600">Tus datos están protegidos y solo vos controlás tu información</p>
+              <h3 className="font-semibold text-gray-800 mb-2">Sin Conflictos</h3>
+              <p className="text-sm text-gray-600">Mantén la armonía en el grupo</p>
             </Card>
           </div>
 
-          {/* Benefits Section */}
+          {/* Call to Action */}
           <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-8">¿Por qué elegir VaquitApp?</h2>
-            <div className="grid md:grid-cols-3 gap-8">
-              <div>
-                <div className="text-4xl mb-4">🎯</div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Simple y rápido</h3>
-                <p className="text-gray-600">Interfaz intuitiva que hace que dividir gastos sea pan comido</p>
-              </div>
-              <div>
-                <div className="text-4xl mb-4">💰</div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Transparente</h3>
-                <p className="text-gray-600">Todos ven los gastos y balances en tiempo real</p>
-              </div>
-              <div>
-                <div className="text-4xl mb-4">🚀</div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Sin complicaciones</h3>
-                <p className="text-gray-600">No más cálculos manuales ni discusiones sobre quién debe qué</p>
-              </div>
-            </div>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-4">¿Listo para simplificar tus gastos?</h2>
+            <p className="text-lg text-gray-600 mb-6">Únete a miles de usuarios que ya disfrutan de VaquitApp</p>
           </div>
         </div>
       </main>
 
       {/* Footer */}
       <footer className="container mx-auto px-4 py-8 text-center text-gray-500">
-        <p>&copy; 2024 VaquitApp. Hecho con ❤️ para simplificar tus gastos compartidos.</p>
+        <p>&copy; 2024 VaquitApp. Hecho con ❤️ para dividir gastos fácilmente.</p>
       </footer>
     </div>
   )
