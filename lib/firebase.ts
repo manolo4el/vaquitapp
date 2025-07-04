@@ -1,25 +1,24 @@
 import { initializeApp } from "firebase/app"
-import { getAuth, GoogleAuthProvider } from "firebase/auth"
+import { getAuth } from "firebase/auth"
+import { getFirestore } from "firebase/firestore"
 
-// Actualizar la configuración de Firebase con el App ID correcto
 const firebaseConfig = {
   apiKey: "AIzaSyCaWsgwyBmvlm266WnloJV6etlQr7igSgs",
   authDomain: "divisor-gastos-42acd.firebaseapp.com",
   projectId: "divisor-gastos-42acd",
-  storageBucket: "divisor-gastos-42acd.appspot.com",
+  storageBucket: "divisor-gastos-42acd.firebasestorage.app", // Corregido
   messagingSenderId: "163528661432",
-  appId: "1:163528661432:web:8f9a1b2c3d4e5f6g7h8i9j0k",
+  appId: "1:163528661432:web:0559e64e085c1c251ed74d",
+  measurementId: "G-3NZP8SHPNS",
 }
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
 
-// Initialize Firebase Auth and get a reference to the service
+// Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app)
 
-// Initialize Google Auth Provider
-export const googleProvider = new GoogleAuthProvider()
-googleProvider.addScope("email")
-googleProvider.addScope("profile")
+// Initialize Cloud Firestore and get a reference to the service
+export const db = getFirestore(app)
 
-export default app
+console.log("Firebase initialized successfully with project:", firebaseConfig.projectId)
