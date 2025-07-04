@@ -1,17 +1,15 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import { ClientLayout } from "./ClientLayout"
-
-const inter = Inter({ subsets: ["latin"] })
+import ClientLayout from "./ClientLayout"
 
 export const metadata: Metadata = {
-  title: "Vaquitapp - Divide gastos fácilmente",
-  description: "La forma más fácil de dividir gastos con amigos y familia",
-  manifest: "/manifest.json",
-  themeColor: "#10b981",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+  title: "Vaquitapp - Divide gastos entre amigos",
+  description: "Aplicación para dividir gastos entre amigos de forma fácil y eficiente",
+  icons: {
+    icon: "/cow-logo.svg",
+    shortcut: "/cow-logo.svg",
+    apple: "/cow-logo.svg",
+  },
     generator: 'v0.dev'
 }
 
@@ -20,11 +18,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  return (
-    <html lang="es">
-      <body className={inter.className}>
-        <ClientLayout>{children}</ClientLayout>
-      </body>
-    </html>
-  )
+  return <ClientLayout>{children}</ClientLayout>
 }
+
+
+import './globals.css'

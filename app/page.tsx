@@ -16,11 +16,13 @@ import { Toaster } from "@/components/ui/toaster"
 import { useEffect, useState } from "react"
 import { DebtConsolidationPage } from "@/components/debt-consolidation-page"
 import { ExpenseDetailPage } from "@/components/expense-detail-page"
+// Agregar el import del hook de analytics al inicio
 import { useAnalytics } from "@/hooks/use-analytics"
 
 export default function Page() {
   const { user, userProfile, logout, loading, authError } = useAuth()
   const { currentPage, selectedGroupId, selectedExpenseId, navigateTo } = useNavigation()
+  // En el componente Page, después de la línea const { currentPage, selectedGroupId, selectedExpenseId, navigateTo } = useNavigation(), agregar:
   const { trackPageView, trackUserAction } = useAnalytics()
   const [loadingTimeout, setLoadingTimeout] = useState(false)
   const [joinGroupId, setJoinGroupId] = useState<string | null>(null)
@@ -60,14 +62,14 @@ export default function Page() {
     return () => clearTimeout(timer)
   }, [loading])
 
-  // Trackear cambios de página
+  // Agregar useEffect para trackear cambios de página después de los useEffect existentes:
   useEffect(() => {
     if (user && currentPage) {
       trackPageView(currentPage)
     }
   }, [currentPage, user, trackPageView])
 
-  // Trackear login exitoso
+  // Agregar useEffect para trackear login exitoso:
   useEffect(() => {
     if (user && !loading) {
       trackUserAction("login_success", {

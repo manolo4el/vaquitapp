@@ -136,6 +136,11 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
     }
   }, [group, expenses, transfers, user])
 
+  useEffect(() => {
+    // Scroll to top when component mounts
+    window.scrollTo(0, 0)
+  }, [])
+
   const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0)
   const userBalance = balances[user?.uid || ""] || 0
 
