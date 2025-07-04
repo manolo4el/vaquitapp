@@ -25,6 +25,7 @@ import { toast } from "@/hooks/use-toast"
 import { FriendsSelector } from "@/components/friends-selector"
 import { GroupChat } from "@/components/group-chat"
 import Image from "next/image"
+import { useAnalytics } from "@/hooks/use-analytics"
 
 interface GroupDetailsPageProps {
   groupId: string
@@ -68,6 +69,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   const [showIncludeInExpensesDialog, setShowIncludeInExpensesDialog] = useState(false)
   const [pendingNewMembers, setPendingNewMembers] = useState<string[]>([])
   const [showShareDialog, setShowShareDialog] = useState(false)
+  const { trackGroupAction, trackUserAction } = useAnalytics()
 
   useEffect(() => {
     const loadGroupData = async () => {
@@ -165,6 +167,12 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
         confirmedBy: user.uid,
       })
 
+      trackUserAction("transfer_confirmed", {
+        amount: settlement.amount,
+        group_id: groupId,
+        to_user: settlement.to,
+      })
+
       toast({
         title: "¡Transferencia confirmada! 💸",
         description: `Se registró el pago de $${settlement.amount.toFixed(2)} a ${getUserDisplayName(settlement.to, usersData)}`,
@@ -207,6 +215,9 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
 
     // Fallback: mostrar dialog personalizado
     setShowShareDialog(true)
+    trackGroupAction("group_share_attempted", groupId, {
+      share_method: navigator.share ? "native" : "manual",
+    })
   }
 
   const copyToClipboardShare = async () => {

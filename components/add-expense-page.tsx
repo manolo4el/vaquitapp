@@ -12,6 +12,7 @@ import { db } from "@/lib/firebase"
 import { collection, addDoc, doc, getDoc } from "firebase/firestore"
 import { ArrowLeft, Plus, Check } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { useAnalytics } from "@/hooks/use-analytics"
 
 interface AddExpensePageProps {
   groupId: string
@@ -27,6 +28,7 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
   const [paidBy, setPaidBy] = useState(user?.uid || "")
   const [participants, setParticipants] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
+  const { trackExpenseAction } = useAnalytics()
 
   useEffect(() => {
     const loadGroupData = async () => {
@@ -87,6 +89,8 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
         participants,
         createdAt: new Date(),
       })
+
+      trackExpenseAction("expense_added", amount, groupId)
 
       toast({
         title: "¡Éxito!",

@@ -14,6 +14,9 @@ import {
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 
+// Agregar el import del hook de analytics al inicio
+import { useAnalytics } from "@/hooks/use-analytics"
+
 interface UserProfile {
   uid: string
   displayName: string | null
@@ -41,6 +44,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
+
+  // En el componente AuthProvider, después de las declaraciones de estado, agregar:
+  const { trackUserAction } = useAnalytics()
 
   useEffect(() => {
     // Verificar si hay un resultado de redirect pendiente
@@ -163,6 +169,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Intentar popup primero
         const result = await signInWithPopup(auth, provider)
         console.log("Popup login successful:", result.user.email)
+        // En la función login, después de console.log("Popup login successful:", result.user.email), agregar:
+        trackUserAction("login_attempt", { method: "google_popup" })
       } catch (popupError: any) {
         console.log("Popup failed, trying redirect:", popupError.message)
 
@@ -193,6 +201,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await signOut(auth)
       setAuthError(null)
       console.log("User logged out successfully")
+      // En la función logout, después de console.log("User logged out successfully"), agregar:
+      trackUserAction("logout", { user_id: user?.uid })
     } catch (error: any) {
       console.error("Logout error:", error)
       setAuthError(getErrorMessage(error))
