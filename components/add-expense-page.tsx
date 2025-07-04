@@ -13,6 +13,7 @@ import { collection, addDoc, doc, getDoc } from "firebase/firestore"
 import { ArrowLeft, Plus, Check } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { useAnalytics } from "@/hooks/use-analytics"
+import { parseInputNumber, formatAmount } from "@/lib/calculations"
 
 interface AddExpensePageProps {
   groupId: string
@@ -70,11 +71,11 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
       return
     }
 
-    const amount = Number.parseFloat(expenseAmount)
+    const amount = parseInputNumber(expenseAmount)
     if (isNaN(amount) || amount <= 0) {
       toast({
         title: "Error",
-        description: "El monto debe ser un número válido",
+        description: "El monto debe ser un número válido mayor a 0",
         variant: "destructive",
       })
       return
@@ -125,6 +126,9 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
     )
   }
 
+  // Calcular el monto por persona para mostrar
+  const amountPerPerson = participants.length > 0 ? parseInputNumber(expenseAmount) / participants.length : 0
+
   return (
     <div className="space-y-6 pb-6">
       {/* Header */}
@@ -167,14 +171,20 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
             <Label htmlFor="amount" className="text-primary font-medium">
               ¿Cuánto gastaste?
             </Label>
-            <Input
-              id="amount"
-              type="number"
-              placeholder="0.00"
-              value={expenseAmount}
-              onChange={(e) => setExpenseAmount(e.target.value)}
-              className="border-primary/20 focus:border-primary h-12"
-            />
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">$</span>
+              <Input
+                id="amount"
+                type="text"
+                placeholder="0,00"
+                value={expenseAmount}
+                onChange={(e) => setExpenseAmount(e.target.value)}
+                className="border-primary/20 focus:border-primary h-12 pl-8"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              💡 Podés usar punto (.) o coma (,) para los decimales. Ej: 1500,50 o 1.500,50
+            </p>
           </div>
 
           {/* Quién pagó */}
@@ -222,11 +232,25 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
                 </div>
               ))}
             </div>
-            <p className="text-sm text-muted-foreground">
-              El gasto se dividirá entre {participants.length} persona{participants.length !== 1 ? "s" : ""}
-              {participants.length > 0 &&
-                ` (${(Number.parseFloat(expenseAmount) / participants.length || 0).toFixed(2)} cada uno)`}
-            </p>
+            <div className="p-3 bg-gradient-to-r from-accent/10 to-secondary/10 rounded-xl border border-accent/20">
+              <div className="text-sm text-accent-foreground">
+                <div className="font-medium mb-1">📊 División del gasto:</div>
+                <div className="text-xs text-muted-foreground">
+                  {participants.length > 0 ? (
+                    <>
+                      El gasto se dividirá entre {participants.length} persona{participants.length !== 1 ? "s" : ""}
+                      {amountPerPerson > 0 && (
+                        <span className="block mt-1 font-medium text-accent-foreground">
+                          ${formatAmount(amountPerPerson)} cada uno
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    "Selecciona al menos un participante"
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Botones de acción */}

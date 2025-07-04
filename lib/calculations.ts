@@ -141,6 +141,7 @@ export function getUserDisplayName(userId: string, usersData: any): string {
   return userId.slice(0, 6)
 }
 
+// FUNCIONES DE FORMATO MEJORADAS - Formato argentino con . para miles y , para decimales
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
@@ -150,14 +151,66 @@ export function formatCurrency(amount: number): string {
   })
     .format(amount)
     .replace("ARS", "$")
+    .replace(/\s/g, "") // Remover espacios
 }
 
-// Nueva función para formatear números sin símbolo de moneda
+// Función para formatear números sin símbolo de moneda - FORMATO ARGENTINO
 export function formatAmount(amount: number): string {
   return new Intl.NumberFormat("es-AR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount)
+}
+
+// Nueva función para formatear números en inputs (sin formato, solo el número)
+export function formatInputNumber(amount: number): string {
+  return amount.toString()
+}
+
+// Nueva función para parsear números desde inputs (maneja tanto . como , para decimales)
+export function parseInputNumber(value: string): number {
+  if (!value || value.trim() === "") return 0
+
+  // Remover espacios y caracteres no numéricos excepto . y ,
+  let cleanValue = value.replace(/[^\d.,]/g, "")
+
+  // Si tiene tanto . como ,, determinar cuál es el separador decimal
+  if (cleanValue.includes(".") && cleanValue.includes(",")) {
+    // Si el último separador es una coma, es decimal
+    const lastComma = cleanValue.lastIndexOf(",")
+    const lastDot = cleanValue.lastIndexOf(".")
+
+    if (lastComma > lastDot) {
+      // La coma es el separador decimal
+      cleanValue = cleanValue.replace(/\./g, "").replace(",", ".")
+    } else {
+      // El punto es el separador decimal
+      cleanValue = cleanValue.replace(/,/g, "")
+    }
+  } else if (cleanValue.includes(",")) {
+    // Solo tiene comas, asumir que es separador decimal si está al final
+    const commaIndex = cleanValue.lastIndexOf(",")
+    const afterComma = cleanValue.substring(commaIndex + 1)
+
+    if (afterComma.length <= 2) {
+      // Es separador decimal
+      cleanValue = cleanValue.replace(",", ".")
+    } else {
+      // Es separador de miles
+      cleanValue = cleanValue.replace(/,/g, "")
+    }
+  }
+
+  const parsed = Number.parseFloat(cleanValue)
+  return isNaN(parsed) ? 0 : parsed
+}
+
+// Función para mostrar números en formato argentino pero permitir edición fácil
+export function formatDisplayNumber(amount: number, isEditing = false): string {
+  if (isEditing) {
+    return formatInputNumber(amount)
+  }
+  return formatAmount(amount)
 }
 
 export function splitExpenseEqually(amount: number, participants: string[]): { [userId: string]: number } {
