@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, query, where, onSnapshot, doc, getDoc, addDoc } from "firebase/firestore"
 import { calculateBalancesWithTransfers, getUserDisplayName, formatAmount } from "@/lib/calculations"
-import { ArrowLeft, TrendingUp, TrendingDown, CreditCard } from "lucide-react"
+import { ArrowLeft, TrendingUp, TrendingDown, Copy, CreditCard, CheckCircle, Users, Share } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 
 interface DebtConsolidationPageProps {
@@ -416,4 +418,150 @@ ${groupsList}${paymentInfo}
                     <div className="text-2xl font-bold">${formatAmount(debt.totalAmount)}</div>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">\
+                <CardContent className="space-y-4">
+                  {/* Desglose por grupo */}
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">Desglose por grupo:</div>
+                    {debt.groups.map((group) => (
+                      <div key={group.groupId} className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                        <span className="text-sm">{group.groupName}</span>
+                        <Badge variant="outline" className="text-destructive border-destructive/30">
+                          ${formatAmount(group.amount)}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Información de pago */}
+                  {debt.otherUserPaymentInfo ? (
+                    <div className="p-4 bg-gradient-to-r from-accent/10 to-secondary/10 rounded-xl border border-accent/20">
+                      <div className="space-y-2">
+                        <div className="font-medium text-accent-foreground text-sm">Información de pago:</div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-mono bg-white/50 px-2 py-1 rounded flex-1 break-all">
+                            {debt.otherUserPaymentInfo}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => copyToClipboard(debt.otherUserPaymentInfo!)}
+                            className="bg-transparent"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-destructive/10 rounded-xl text-center">
+                      <div className="text-destructive font-medium text-sm">⚠️ Sin información de pago</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {debt.otherUserName} debe completar su perfil
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botón de confirmación */}
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary">
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Confirmar Transferencia Consolidada
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="text-destructive flex items-center gap-2">
+                          💸 Confirmar transferencia a {debt.otherUserName}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="text-center p-4 bg-destructive/10 rounded-xl">
+                          <div className="text-3xl font-bold text-destructive">${formatAmount(debt.totalAmount)}</div>
+                          <div className="text-sm text-muted-foreground mt-1">Monto total a transferir</div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="text-sm font-medium">Se confirmará en estos grupos:</div>
+                          {debt.groups.map((group) => (
+                            <div key={group.groupId} className="flex justify-between p-2 bg-muted/30 rounded text-sm">
+                              <span>{group.groupName}</span>
+                              <span className="font-medium">${formatAmount(group.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="text-xs text-muted-foreground text-center">
+                          💡 Tip: Usa la descripción "Vaquitapp - Pago consolidado" en tu transferencia
+                        </div>
+
+                        <Button
+                          onClick={() => confirmConsolidatedTransfer(debt)}
+                          className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Sí, confirmar transferencia
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+
+        {/* Me Deben */}
+        <TabsContent value="debts-to-me" className="space-y-4">
+          {consolidatedDebtsToMe.length === 0 ? (
+            <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-primary/5">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <div className="text-4xl mb-4">💸</div>
+                <h3 className="text-xl font-bold text-primary mb-2">Nadie te debe dinero</h3>
+                <p className="text-muted-foreground text-center">Todos están al día contigo</p>
+              </CardContent>
+            </Card>
+          ) : (
+            consolidatedDebtsToMe.map((debt) => (
+              <Card key={debt.otherUserId} className="border-0 shadow-xl bg-gradient-to-br from-card to-accent/5">
+                <CardHeader>
+                  <CardTitle className="text-lg text-accent-foreground flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      {debt.otherUserName} te debe
+                    </div>
+                    <div className="text-2xl font-bold">${formatAmount(debt.totalAmount)}</div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Desglose por grupo */}
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">Desglose por grupo:</div>
+                    {debt.groups.map((group) => (
+                      <div key={group.groupId} className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                        <span className="text-sm">{group.groupName}</span>
+                        <Badge variant="outline" className="text-accent-foreground border-accent/30">
+                          ${formatAmount(group.amount)}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Botón para compartir recordatorio */}
+                  <Button
+                    onClick={() => shareDebt(debt)}
+                    variant="outline"
+                    className="w-full border-accent/30 hover:bg-accent/10 text-accent-foreground bg-transparent"
+                  >
+                    <Share className="h-4 w-4 mr-2" />
+                    Enviar recordatorio a {debt.otherUserName}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
