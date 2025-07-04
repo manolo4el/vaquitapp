@@ -36,7 +36,6 @@ export function GroupChat({ groupId, groupName, usersData }: GroupChatProps) {
   const [sending, setSending] = useState(false)
   const [permissionError, setPermissionError] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -59,12 +58,7 @@ export function GroupChat({ groupId, groupName, usersData }: GroupChatProps) {
         setMessages(messagesData.reverse())
         setLoading(false)
         setPermissionError(false)
-
-        // Solo hacer scroll si se debe hacer automáticamente
-        if (shouldAutoScroll) {
-          setTimeout(scrollToBottom, 100)
-          setShouldAutoScroll(false)
-        }
+        // Removed automatic scrolling
       },
       (error) => {
         console.error("Error fetching messages:", error)
@@ -81,7 +75,9 @@ export function GroupChat({ groupId, groupName, usersData }: GroupChatProps) {
     )
 
     return () => unsubscribe()
-  }, [groupId, user, shouldAutoScroll])
+  }, [groupId, user])
+
+  // Removed automatic scrolling effect
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -99,7 +95,8 @@ export function GroupChat({ groupId, groupName, usersData }: GroupChatProps) {
 
       setNewMessage("")
       setPermissionError(false)
-      setShouldAutoScroll(true) // Activar scroll automático después de enviar
+      // Only scroll after sending a message
+      setTimeout(scrollToBottom, 100)
     } catch (error: any) {
       console.error("Error sending message:", error)
       if (error.code === "permission-denied") {
