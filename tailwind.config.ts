@@ -18,80 +18,78 @@ const config: Config = {
         "2xl": "1400px",
       },
     },
+    screens: {
+      xs: "475px",
+      sm: "640px",
+      md: "768px",
+      lg: "1024px",
+      xl: "1280px",
+      "2xl": "1536px",
+    },
     extend: {
       colors: {
-        // Nueva paleta principal basada en el verde de la vaca
-        lime: {
-          50: "#f0fdf4",
-          100: "#dcfce7",
-          200: "#bbf7d0",
-          300: "#86efac",
-          400: "#5bd279", // Color principal del ícono
-          500: "#22c55e",
-          600: "#16a34a",
-          700: "#15803d",
-          800: "#166534",
-          900: "#14532d",
-        },
-        // Colores complementarios (púrpura/violeta)
-        violet: {
-          50: "#faf5ff",
-          100: "#f3e8ff",
-          200: "#e9d5ff",
-          300: "#d8b4fe",
-          400: "#c084fc",
-          500: "#a855f7",
-          600: "#9333ea",
-          700: "#7c3aed",
-          800: "#6b21a8",
-          900: "#581c87",
-        },
-        // Colores de acento (naranja suave)
-        orange: {
-          50: "#fff7ed",
-          100: "#ffedd5",
-          200: "#fed7aa",
-          300: "#fdba74",
-          400: "#fb923c",
-          500: "#f97316",
-          600: "#ea580c",
-          700: "#c2410c",
-          800: "#9a3412",
-          900: "#7c2d12",
-        },
-        // Mantener colores del sistema
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "#8B4513", // Saddle Brown
+          foreground: "#FFFFFF",
+          50: "#F5E6D3",
+          100: "#E8D0B3",
+          200: "#D4B896",
+          300: "#C0A079",
+          400: "#A6875C",
+          500: "#8B4513",
+          600: "#7A3D11",
+          700: "#68350F",
+          800: "#562D0D",
+          900: "#44250B",
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: "#DEB887", // Burlywood
+          foreground: "#4A4A4A",
+          50: "#F9F5F0",
+          100: "#F2E8D9",
+          200: "#E8D5B8",
+          300: "#DEB887",
+          400: "#D4A574",
+          500: "#CA9261",
+          600: "#B8834E",
+          700: "#A6743B",
+          800: "#946528",
+          900: "#825615",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+          DEFAULT: "#90EE90", // Light Green
+          foreground: "#2D5016",
+          50: "#F0FFF0",
+          100: "#E6FFE6",
+          200: "#CCFFCC",
+          300: "#B3FFB3",
+          400: "#99FF99",
+          500: "#90EE90",
+          600: "#7FDD7F",
+          700: "#6ECC6E",
+          800: "#5DBB5D",
+          900: "#4CAA4C",
         },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+        muted: {
+          DEFAULT: "#F5F5DC", // Beige
+          foreground: "#6B5B47",
+        },
+        destructive: {
+          DEFAULT: "#DC143C",
+          foreground: "#FFFFFF",
         },
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: "#FFFEF7", // Ivory
+          foreground: "#4A4A4A",
+        },
+        popover: {
+          DEFAULT: "#FFFEF7",
+          foreground: "#4A4A4A",
         },
       },
       borderRadius: {
@@ -108,10 +106,21 @@ const config: Config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        bounce: {
+          "0%, 100%": {
+            transform: "translateY(-25%)",
+            animationTimingFunction: "cubic-bezier(0.8,0,1,1)",
+          },
+          "50%": {
+            transform: "none",
+            animationTimingFunction: "cubic-bezier(0,0,0.2,1)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        bounce: "bounce 1s infinite",
       },
     },
   },
