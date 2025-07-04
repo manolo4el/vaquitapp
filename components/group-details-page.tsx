@@ -8,7 +8,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, onSnapshot, doc, getDoc, addDoc, updateDoc, getDocs, writeBatch } from "firebase/firestore"
-import { calculateBalancesWithTransfers, efficientTransfers, getUserDisplayName } from "@/lib/calculations"
+import {
+  calculateBalancesWithTransfers,
+  efficientTransfers,
+  getUserDisplayName,
+  formatAmount,
+} from "@/lib/calculations"
 import {
   ArrowLeft,
   Users,
@@ -180,7 +185,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
 
       toast({
         title: "¡Transferencia confirmada! 💸",
-        description: `Se registró el pago de $${settlement.amount.toFixed(2)} a ${getUserDisplayName(settlement.to, usersData)}`,
+        description: `Se registró el pago de $${formatAmount(settlement.amount)} a ${getUserDisplayName(settlement.to, usersData)}`,
       })
     } catch (error) {
       toast({
@@ -358,7 +363,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
             <span className="truncate">{group.name}</span>
           </h1>
           <p className="text-sm text-muted-foreground truncate">
-            {group.members.length} miembros • ${totalExpenses.toFixed(2)} total
+            {group.members.length} miembros • ${formatAmount(totalExpenses)} total
           </p>
         </div>
         <Button
@@ -561,21 +566,21 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
           <div className="text-center p-4 sm:p-6 rounded-xl bg-gradient-to-br from-muted/30 to-secondary/10">
             {userBalance > 0 ? (
               <div className="text-accent-foreground">
-                <div className="text-3xl sm:text-4xl font-bold">+${userBalance.toFixed(2)}</div>
+                <div className="text-3xl sm:text-4xl font-bold">+${formatAmount(userBalance)}</div>
                 <div className="text-xs sm:text-sm bg-accent/20 px-3 py-1 rounded-full inline-block mt-2">
                   ¡Te deben dinero! 🎉
                 </div>
               </div>
             ) : userBalance < 0 ? (
               <div className="text-destructive">
-                <div className="text-3xl sm:text-4xl font-bold">${userBalance.toFixed(2)}</div>
+                <div className="text-3xl sm:text-4xl font-bold">${formatAmount(userBalance)}</div>
                 <div className="text-xs sm:text-sm bg-destructive/20 px-3 py-1 rounded-full inline-block mt-2">
                   Debes dinero 💸
                 </div>
               </div>
             ) : (
               <div className="text-primary">
-                <div className="text-3xl sm:text-4xl font-bold">$0.00</div>
+                <div className="text-3xl sm:text-4xl font-bold">$0,00</div>
                 <div className="text-xs sm:text-sm bg-primary/20 px-3 py-1 rounded-full inline-block mt-2">
                   ¡Estás al día! ✨
                 </div>
@@ -611,7 +616,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
                     </div>
                     <div className="text-right flex-shrink-0 ml-2">
                       <div className="text-base sm:text-lg font-bold text-destructive">
-                        ${settlement.amount.toFixed(2)}
+                        ${formatAmount(settlement.amount)}
                       </div>
                       <ArrowRight className="h-4 w-4 text-muted-foreground ml-auto" />
                     </div>
@@ -626,7 +631,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
                   <div className="space-y-4">
                     <div className="text-center p-4 bg-destructive/10 rounded-xl">
                       <div className="text-2xl sm:text-3xl font-bold text-destructive">
-                        ${settlement.amount.toFixed(2)}
+                        ${formatAmount(settlement.amount)}
                       </div>
                       <div className="text-xs sm:text-sm text-muted-foreground mt-1">Monto a transferir</div>
                     </div>
@@ -712,7 +717,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
                     </div>
                   </div>
                   <div className="text-sm sm:text-lg font-bold text-primary flex-shrink-0">
-                    ${transfer.amount.toFixed(2)}
+                    ${formatAmount(transfer.amount)}
                   </div>
                 </div>
               ))}
@@ -750,7 +755,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
                     {getUserDisplayName(settlement.to, usersData)}
                   </span>
                   <Badge className="ml-auto bg-accent/20 text-accent-foreground text-xs sm:text-sm flex-shrink-0">
-                    ${settlement.amount.toFixed(2)}
+                    ${formatAmount(settlement.amount)}
                   </Badge>
                 </div>
               ))}
@@ -798,7 +803,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
                       balance > 0 ? "text-accent-foreground" : balance < 0 ? "text-destructive" : "text-primary"
                     }`}
                   >
-                    {balance > 0 ? "+" : ""}${balance.toFixed(2)}
+                    {balance > 0 ? "+" : ""}${formatAmount(balance)}
                   </div>
                 </div>
               )
@@ -869,9 +874,9 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
 
                   {/* Monto */}
                   <div className="text-right flex-shrink-0">
-                    <div className="text-base sm:text-lg font-bold text-primary">${expense.amount.toFixed(2)}</div>
+                    <div className="text-base sm:text-lg font-bold text-primary">${formatAmount(expense.amount)}</div>
                     <div className="text-xs text-muted-foreground">
-                      ${(expense.amount / (expense.participants?.length || group.members.length)).toFixed(2)} c/u
+                      ${formatAmount(expense.amount / (expense.participants?.length || group.members.length))} c/u
                     </div>
                   </div>
                 </div>
