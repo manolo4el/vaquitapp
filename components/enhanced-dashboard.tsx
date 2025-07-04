@@ -14,7 +14,6 @@ import { Plus, TrendingUp, TrendingDown, Users, Sparkles, Copy, Share, Trash2, S
 import Image from "next/image"
 import { toast } from "@/hooks/use-toast"
 import { FriendsSelector } from "@/components/friends-selector"
-// Agregar el import del hook de analytics al inicio
 import { useAnalytics } from "@/hooks/use-analytics"
 
 interface Group {
@@ -41,7 +40,6 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
   const [createdGroupName, setCreatedGroupName] = useState("")
   const [totalBalances, setTotalBalances] = useState({ youOwe: 0, theyOweYou: 0 })
   const [groupBalances, setGroupBalances] = useState<{ [groupId: string]: number }>({})
-  // En el componente EnhancedDashboard, después de la línea const [groupBalances, setGroupBalances] = useState<{ [groupId: string]: number }>({}), agregar:
   const { trackGroupAction } = useAnalytics()
 
   // Filtrar grupos basado en el término de búsqueda
@@ -150,7 +148,7 @@ export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
       setSelectedFriends([])
       setIsDialogOpen(false)
       setIsCreatedDialogOpen(true)
-      // En la función createGroup, después de la línea setIsCreatedDialogOpen(true), agregar:
+
       trackGroupAction("group_created", docRef.id, {
         group_name: newGroupName,
         member_count: members.length,
