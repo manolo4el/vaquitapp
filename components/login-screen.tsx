@@ -8,13 +8,13 @@ import { LogIn, Loader2 } from "lucide-react"
 import Image from "next/image"
 
 export function LoginScreen() {
-  const { loginWithGoogle, loading } = useAuth()
+  const { login } = useAuth()
   const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   const handleGoogleLogin = async () => {
     setIsLoggingIn(true)
     try {
-      await loginWithGoogle()
+      await login()
     } catch (error) {
       console.error("Error during login:", error)
     } finally {
@@ -53,11 +53,11 @@ export function LoginScreen() {
 
           <Button
             onClick={handleGoogleLogin}
-            disabled={loading || isLoggingIn}
+            disabled={isLoggingIn}
             className="w-full h-12 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
             size="lg"
           >
-            {loading || isLoggingIn ? (
+            {isLoggingIn ? (
               <>
                 <Loader2 className="h-5 w-5 mr-3 animate-spin" />
                 Iniciando sesión...
@@ -114,9 +114,7 @@ export function LoginScreen() {
           </div>
 
           <div className="text-center">
-            <p className="text-xs text-muted-foreground">
-              Ahora dividir los gastos es muuuuuy facil! 🐄
-            </p>
+            <p className="text-xs text-muted-foreground">Ahora dividir los gastos es muuuuuy facil! 🐄</p>
           </div>
         </CardContent>
       </Card>
