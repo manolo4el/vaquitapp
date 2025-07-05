@@ -12,7 +12,6 @@
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
     "@radix-ui/react-aspect-ratio": "latest",
-    "@radix-ui/react-avatar": "^1.0.4",
     "@radix-ui/react-checkbox": "latest",
     "@radix-ui/react-collapsible": "latest",
     "@radix-ui/react-context-menu": "latest",
@@ -28,7 +27,6 @@
     "@radix-ui/react-scroll-area": "latest",
     "@radix-ui/react-select": "latest",
     "@radix-ui/react-separator": "latest",
-    "@radix-ui/react-sheet": "^1.0.4",
     "@radix-ui/react-slider": "latest",
     "@radix-ui/react-slot": "latest",
     "@radix-ui/react-switch": "latest",
@@ -61,11 +59,11 @@
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "autoprefixer": "^10.4.16",
-    "eslint": "^8.57.0",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
     "eslint-config-next": "14.0.0",
     "postcss": "^8.5",
-    "tailwindcss": "^3.4.0",
+    "tailwindcss": "^3.3.0",
     "typescript": "^5"
   }
 }
