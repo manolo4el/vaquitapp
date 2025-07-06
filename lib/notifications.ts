@@ -10,8 +10,8 @@ export interface CreateNotificationData {
 
 export async function createNotification(data: CreateNotificationData) {
   try {
-    // Usar la estructura de subcolección: /notifications/{userId}/items/{notificationId}
-    await addDoc(collection(db, "notifications", data.userId, "items"), {
+    await addDoc(collection(db, "notifications"), {
+      userId: data.userId,
       type: data.type,
       message: data.message,
       groupId: data.groupId,
