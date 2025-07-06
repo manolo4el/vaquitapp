@@ -16,13 +16,11 @@ import { Toaster } from "@/components/ui/toaster"
 import { useEffect, useState } from "react"
 import { DebtConsolidationPage } from "@/components/debt-consolidation-page"
 import { ExpenseDetailPage } from "@/components/expense-detail-page"
-// Agregar el import del hook de analytics al inicio
 import { useAnalytics } from "@/hooks/use-analytics"
 
 export default function Page() {
   const { user, userProfile, logout, loading, authError } = useAuth()
   const { currentPage, selectedGroupId, selectedExpenseId, navigateTo } = useNavigation()
-  // En el componente Page, después de la línea const { currentPage, selectedGroupId, selectedExpenseId, navigateTo } = useNavigation(), agregar:
   const { trackPageView, trackUserAction } = useAnalytics()
   const [loadingTimeout, setLoadingTimeout] = useState(false)
   const [joinGroupId, setJoinGroupId] = useState<string | null>(null)
@@ -62,14 +60,12 @@ export default function Page() {
     return () => clearTimeout(timer)
   }, [loading])
 
-  // Agregar useEffect para trackear cambios de página después de los useEffect existentes:
   useEffect(() => {
     if (user && currentPage) {
       trackPageView(currentPage)
     }
   }, [currentPage, user, trackPageView])
 
-  // Agregar useEffect para trackear login exitoso:
   useEffect(() => {
     if (user && !loading) {
       trackUserAction("login_success", {
@@ -213,7 +209,7 @@ export default function Page() {
             </div>
 
             <div className="flex items-center space-x-2">
-              {/* Atajos de navegación en el header */}
+              {/* Botón de Inicio */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -228,6 +224,7 @@ export default function Page() {
                 <span className="text-xs">Inicio</span>
               </Button>
 
+              {/* Botón de Perfil */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -240,6 +237,7 @@ export default function Page() {
                 <span className="text-xs">Perfil</span>
               </Button>
 
+              {/* Indicador de perfil incompleto */}
               {!userProfile?.paymentInfo && (
                 <Button
                   variant="outline"
@@ -251,6 +249,7 @@ export default function Page() {
                 </Button>
               )}
 
+              {/* Botón de Salir */}
               <Button
                 variant="outline"
                 size="icon"
@@ -264,7 +263,7 @@ export default function Page() {
         </div>
       </header>
 
-      {/* Main content - Sin padding bottom para la barra de navegación */}
+      {/* Main content */}
       <main className="max-w-md mx-auto px-4 py-6">{renderCurrentPage()}</main>
     </div>
   )
