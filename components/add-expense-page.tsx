@@ -1,70 +1,115 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ArrowLeft, DollarSign, Users, FileText } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { db } from "@/lib/firebase"
-import { collection, addDoc, doc, getDoc } from "firebase/firestore"
-import { ArrowLeft, Plus, Check } from "lucide-react"
-import { toast } from "@/hooks/use-toast"
-import { useAnalytics } from "@/hooks/use-analytics"
-import { parseInputNumber, formatAmount } from "@/lib/calculations"
+import { useToast } from "@/hooks/use-toast"
 import { useNotifications } from "@/hooks/use-notifications"
+import { doc, getDoc, collection, addDoc, updateDoc, arrayUnion, Timestamp } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { formatCurrency } from "@/lib/calculations"
 
 interface AddExpensePageProps {
-  groupId: string
-  onNavigate: (page: string, groupId?: string) => void
+  groupId?: string
+  onNavigate: (page: string, data?: any) => void
+}
+
+interface GroupMember {
+  id: string
+  name: string
+  email: string
+  photoURL?: string
+}
+
+interface Group {
+  id: string
+  name: string
+  members: string[]
+  memberDetails: GroupMember[]
 }
 
 export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
   const { user } = useAuth()
-  const [group, setGroup] = useState<any>(null)
-  const [usersData, setUsersData] = useState<any>({})
-  const [expenseTitle, setExpenseTitle] = useState("")
-  const [expenseAmount, setExpenseAmount] = useState("")
-  const [paidBy, setPaidBy] = useState(user?.uid || "")
-  const [participants, setParticipants] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
-  const { trackExpenseAction } = useAnalytics()
+  const { toast } = useToast()
   const { createNotification } = useNotifications()
+  const [group, setGroup] = useState<Group | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  // Form state
+  const [description, setDescription] = useState("")
+  const [amount, setAmount] = useState("")
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([])
+  const [category, setCategory] = useState("general")
 
   useEffect(() => {
-    const loadGroupData = async () => {
-      if (!groupId) return
+    if (groupId && user) {
+      loadGroup()
+    }
+  }, [groupId, user])
 
+  const loadGroup = async () => {
+    if (!groupId) return
+
+    try {
       const groupDoc = await getDoc(doc(db, "groups", groupId))
       if (groupDoc.exists()) {
-        const groupData = { id: groupDoc.id, ...groupDoc.data() }
-        setGroup(groupData)
-        setParticipants(groupData.members) // Por defecto, todos participan
+        const groupData = groupDoc.data()
 
-        // Cargar datos de usuarios
-        const usersPromises = groupData.members.map((uid: string) => getDoc(doc(db, "users", uid)))
-        const usersSnaps = await Promise.all(usersPromises)
-        const usersDataMap: any = {}
-        usersSnaps.forEach((snap) => {
-          if (snap.exists()) {
-            usersDataMap[snap.id] = snap.data()
+        // Load member details
+        const memberDetails: GroupMember[] = []
+        for (const memberId of groupData.members) {
+          const memberDoc = await getDoc(doc(db, "users", memberId))
+          if (memberDoc.exists()) {
+            const memberData = memberDoc.data()
+            memberDetails.push({
+              id: memberId,
+              name: memberData.name || memberData.email,
+              email: memberData.email,
+              photoURL: memberData.photoURL,
+            })
           }
+        }
+
+        setGroup({
+          id: groupDoc.id,
+          name: groupData.name,
+          members: groupData.members,
+          memberDetails,
         })
-        setUsersData(usersDataMap)
+
+        // Pre-select current user
+        setSelectedParticipants([user.uid])
       }
+    } catch (error) {
+      console.error("Error loading group:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo cargar el grupo",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
-
-    loadGroupData()
-  }, [groupId])
-
-  const handleParticipantToggle = (userId: string) => {
-    setParticipants((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]))
   }
 
-  const addExpense = async (addAnother = false) => {
-    if (!expenseTitle.trim() || !expenseAmount || participants.length === 0) {
+  const toggleParticipant = (memberId: string) => {
+    setSelectedParticipants((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId],
+    )
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !group || !description.trim() || !amount || selectedParticipants.length === 0) {
       toast({
         title: "Error",
         description: "Por favor completa todos los campos",
@@ -73,228 +118,252 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
       return
     }
 
-    const amount = parseInputNumber(expenseAmount)
-    if (isNaN(amount) || amount <= 0) {
+    const numericAmount = Number.parseFloat(amount.replace(",", "."))
+    if (isNaN(numericAmount) || numericAmount <= 0) {
       toast({
         title: "Error",
-        description: "El monto debe ser un número válido mayor a 0",
+        description: "Por favor ingresa un monto válido",
         variant: "destructive",
       })
       return
     }
 
-    setLoading(true)
+    setSaving(true)
+
     try {
-      await addDoc(collection(db, "groups", groupId, "expenses"), {
-        description: expenseTitle,
-        amount,
-        paidBy,
-        participants,
-        createdAt: new Date(),
+      // Create expense
+      const expenseData = {
+        description: description.trim(),
+        amount: numericAmount,
+        paidBy: user.uid,
+        paidByName: user.displayName || user.email,
+        participants: selectedParticipants,
+        groupId: group.id,
+        groupName: group.name,
+        category,
+        createdAt: Timestamp.now(),
+        createdBy: user.uid,
+        createdByName: user.displayName || user.email,
+      }
+
+      const expenseRef = await addDoc(collection(db, "expenses"), expenseData)
+
+      // Update group with new expense
+      await updateDoc(doc(db, "groups", group.id), {
+        expenses: arrayUnion(expenseRef.id),
+        lastActivity: Timestamp.now(),
       })
 
-      // Create notifications for all participants except the one who paid
-      const notificationPromises = participants
-        .filter((participantId) => participantId !== paidBy)
-        .map((participantId) =>
-          createNotification(
+      // Create notifications for other participants
+      const participantNames = group.memberDetails
+        .filter((member) => selectedParticipants.includes(member.id) && member.id !== user.uid)
+        .map((member) => member.name)
+
+      for (const participantId of selectedParticipants) {
+        if (participantId !== user.uid) {
+          await createNotification(
             participantId,
             "expense_added",
             "Nuevo gasto agregado",
-            `${usersData[paidBy]?.displayName || "Alguien"} agregó "${expenseTitle}" por $${formatAmount(amount)}`,
-            groupId,
+            `${user.displayName || user.email} agregó "${description}" por ${formatCurrency(numericAmount)}`,
+            group.id,
             group.name,
-            paidBy,
-            usersData[paidBy]?.displayName || usersData[paidBy]?.email,
-          ),
-        )
-
-      await Promise.all(notificationPromises)
-
-      trackExpenseAction("expense_added", amount, groupId)
+            user.uid,
+            user.displayName || user.email,
+          )
+        }
+      }
 
       toast({
         title: "¡Éxito!",
-        description: "¡Gasto agregado exitosamente! 🐄",
+        description: "Gasto agregado correctamente",
       })
 
-      if (addAnother) {
-        // Limpiar formulario para agregar otro
-        setExpenseTitle("")
-        setExpenseAmount("")
-        setParticipants(group?.members || [])
-      } else {
-        // Volver al grupo en lugar del dashboard
-        onNavigate("group-details", groupId)
-      }
+      // Navigate back to group details
+      onNavigate("group-details", { groupId: group.id })
     } catch (error) {
+      console.error("Error adding expense:", error)
       toast({
         title: "Error",
-        description: "Error al agregar el gasto",
+        description: "No se pudo agregar el gasto",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
-  if (!group) {
+  const handleSaveAndReturn = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await handleSubmit(e)
+  }
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
 
-  // Calcular el monto por persona para mostrar
-  const amountPerPerson = participants.length > 0 ? parseInputNumber(expenseAmount) / participants.length : 0
+  if (!group) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Grupo no encontrado</p>
+          <Button onClick={() => onNavigate("groups")}>Volver a grupos</Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6 pb-6">
+    <div className="max-w-md mx-auto p-4 space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => onNavigate("group-details", groupId)}
-          className="border-primary/20 hover:bg-primary/10"
-        >
-          <ArrowLeft className="h-4 w-4" />
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={() => onNavigate("group-details", { groupId: group.id })}>
+          <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-primary">Agregar Gasto 💸</h1>
-          <p className="text-muted-foreground">Rebaño: {group.name}</p>
+          <h1 className="text-xl font-bold text-primary">Agregar Gasto</h1>
+          <p className="text-sm text-muted-foreground">{group.name}</p>
         </div>
       </div>
 
-      <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-secondary/5">
-        <CardHeader>
-          <CardTitle className="text-xl text-primary flex items-center gap-2">📝 Detalles del Gasto</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Título del gasto */}
-          <div className="space-y-2">
-            <Label htmlFor="title" className="text-primary font-medium">
-              ¿En qué gastaste?
-            </Label>
-            <Input
-              id="title"
-              placeholder="Ej: Cena en el restaurante, Uber, Supermercado..."
-              value={expenseTitle}
-              onChange={(e) => setExpenseTitle(e.target.value)}
-              className="border-primary/20 focus:border-primary h-12"
-            />
-          </div>
-
-          {/* Monto */}
-          <div className="space-y-2">
-            <Label htmlFor="amount" className="text-primary font-medium">
-              ¿Cuánto gastaste?
-            </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">$</span>
+      <form onSubmit={handleSaveAndReturn} className="space-y-6">
+        {/* Expense Details */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5" />
+              Detalles del Gasto
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="description">Descripción</Label>
               <Input
-                id="amount"
-                type="text"
-                placeholder="0,00"
-                value={expenseAmount}
-                onChange={(e) => setExpenseAmount(e.target.value)}
-                className="border-primary/20 focus:border-primary h-12 pl-8"
+                id="description"
+                placeholder="¿En qué gastaron?"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                disabled={saving}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              💡 Podés usar punto (.) o coma (,) para los decimales. Ej: 1500,50 o 1.500,50
-            </p>
-          </div>
 
-          {/* Quién pagó */}
-          <div className="space-y-2">
-            <Label className="text-primary font-medium">¿Quién pagó?</Label>
-            <Select value={paidBy} onValueChange={setPaidBy}>
-              <SelectTrigger className="border-primary/20 focus:border-primary h-12">
-                <SelectValue placeholder="Selecciona quién pagó" />
-              </SelectTrigger>
-              <SelectContent>
-                {group.members.map((memberId: string) => (
-                  <SelectItem key={memberId} value={memberId}>
-                    {usersData[memberId]?.displayName || usersData[memberId]?.email || "Usuario"}
-                    {memberId === user?.uid && " (Tú)"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="amount">Monto</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="pl-10"
+                  disabled={saving}
+                />
+              </div>
+            </div>
 
-          {/* Participantes */}
-          <div className="space-y-3">
-            <Label className="text-primary font-medium">¿Quiénes participan en este gasto?</Label>
+            <div className="space-y-2">
+              <Label htmlFor="category">Categoría</Label>
+              <select
+                id="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent"
+                disabled={saving}
+              >
+                <option value="general">General</option>
+                <option value="food">Comida</option>
+                <option value="transport">Transporte</option>
+                <option value="entertainment">Entretenimiento</option>
+                <option value="shopping">Compras</option>
+                <option value="utilities">Servicios</option>
+                <option value="other">Otro</option>
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Participants */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="h-5 w-5" />
+              Participantes ({selectedParticipants.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="space-y-3">
-              {group.members.map((memberId: string) => (
-                <div key={memberId} className="flex items-center space-x-3 p-3 bg-muted/30 rounded-lg">
-                  <Checkbox
-                    id={memberId}
-                    checked={participants.includes(memberId)}
-                    onCheckedChange={() => handleParticipantToggle(memberId)}
-                  />
-                  <div className="flex items-center space-x-2 flex-1">
-                    {usersData[memberId]?.photoURL && (
-                      <img
-                        src={usersData[memberId].photoURL || "/placeholder.svg"}
-                        alt="Avatar"
-                        className="h-8 w-8 rounded-full"
-                      />
-                    )}
-                    <Label htmlFor={memberId} className="cursor-pointer">
-                      {usersData[memberId]?.displayName || usersData[memberId]?.email || "Usuario"}
-                      {memberId === user?.uid && " (Tú)"}
-                    </Label>
+              {group.memberDetails.map((member) => (
+                <div
+                  key={member.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                    selectedParticipants.includes(member.id)
+                      ? "border-primary bg-primary/5"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => toggleParticipant(member.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={member.photoURL || "/placeholder.svg"} />
+                      <AvatarFallback>{member.name.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{member.name}</p>
+                      <p className="text-sm text-muted-foreground">{member.email}</p>
+                    </div>
                   </div>
+                  {selectedParticipants.includes(member.id) && (
+                    <Badge variant="default" className="bg-primary">
+                      Incluido
+                    </Badge>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="p-3 bg-gradient-to-r from-accent/10 to-secondary/10 rounded-xl border border-accent/20">
-              <div className="text-sm text-accent-foreground">
-                <div className="font-medium mb-1">📊 División del gasto:</div>
-                <div className="text-xs text-muted-foreground">
-                  {participants.length > 0 ? (
-                    <>
-                      El gasto se dividirá entre {participants.length} persona{participants.length !== 1 ? "s" : ""}
-                      {amountPerPerson > 0 && (
-                        <span className="block mt-1 font-medium text-accent-foreground">
-                          ${formatAmount(amountPerPerson)} cada uno
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    "Selecciona al menos un participante"
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          {/* Botones de acción */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            <Button
-              onClick={() => addExpense(false)}
-              disabled={loading}
-              className="flex-1 h-12 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
-            >
-              <Check className="h-4 w-4 mr-2" />
-              {loading ? "Agregando..." : "Agregar y Volver"}
-            </Button>
-            <Button
-              onClick={() => addExpense(true)}
-              disabled={loading}
-              variant="outline"
-              className="flex-1 h-12 border-accent/30 hover:bg-accent/10 text-accent-foreground"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Agregar y Continuar
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Summary */}
+        {selectedParticipants.length > 0 && amount && (
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="pt-6">
+              <div className="text-center space-y-2">
+                <p className="text-sm text-muted-foreground">Cada persona pagará:</p>
+                <p className="text-2xl font-bold text-primary">
+                  {formatCurrency(Number.parseFloat(amount.replace(",", ".")) / selectedParticipants.length)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1 bg-transparent"
+            onClick={() => onNavigate("group-details", { groupId: group.id })}
+            disabled={saving}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            className="flex-1"
+            disabled={saving || !description.trim() || !amount || selectedParticipants.length === 0}
+          >
+            {saving ? "Guardando..." : "Guardar"}
+          </Button>
+        </div>
+      </form>
     </div>
   )
 }

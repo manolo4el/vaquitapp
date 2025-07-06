@@ -6,10 +6,21 @@ export interface Notification {
   message: string
   groupId: string
   groupName: string
-  createdBy?: string
-  createdByName?: string
   createdAt: Date
   read: boolean
+  expenseId?: string
+  amount?: number
 }
 
-export type NotificationType = Notification["type"]
+export interface NotificationData {
+  userId: string
+  type: "expense_added" | "added_to_group" | "debt_paid"
+  title: string
+  message: string
+  groupId: string
+  groupName: string
+  createdAt: Date
+  read: boolean
+  expenseId?: string
+  amount?: number
+}
