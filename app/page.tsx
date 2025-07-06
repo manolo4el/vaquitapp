@@ -1,138 +1,278 @@
 "use client"
+
 import { useAuth } from "@/contexts/auth-context"
 import { LoginScreen } from "@/components/login-screen"
+import { FirebaseSetupInstructions } from "@/components/firebase-setup-instructions"
 import { EnhancedDashboard } from "@/components/enhanced-dashboard"
-import { GroupsDashboard } from "@/components/groups-dashboard"
-import { GroupDetailsPage } from "@/components/group-details-page"
 import { AddExpensePage } from "@/components/add-expense-page"
 import { UserProfilePage } from "@/components/user-profile-page"
-import { ExpenseDetailPage } from "@/components/expense-detail-page"
-import { DebtConsolidationPage } from "@/components/debt-consolidation-page"
+import { GroupDetailsPage } from "@/components/group-details-page"
 import { GroupJoinPage } from "@/components/group-join-page"
-import { GroupChat } from "@/components/group-chat"
-import { Button } from "@/components/ui/button"
-import { HomeIcon, UserIcon, LogOutIcon } from "lucide-react"
-import { NotificationsDropdown } from "@/components/notifications-dropdown"
 import { useNavigation } from "@/hooks/use-navigation"
+import { Button } from "@/components/ui/button"
+import { LogOut, RefreshCw, User, Home } from "lucide-react"
+import Image from "next/image"
+import { Toaster } from "@/components/ui/toaster"
+import { useEffect, useState } from "react"
+import { DebtConsolidationPage } from "@/components/debt-consolidation-page"
+import { ExpenseDetailPage } from "@/components/expense-detail-page"
+import { useAnalytics } from "@/hooks/use-analytics"
+import { NotificationsDropdown } from "@/components/notifications-dropdown"
 
-export default function Home() {
-  const { user, logout, loading } = useAuth()
-  const { currentPage, currentGroupId, currentExpenseId, navigateTo } = useNavigation()
+export default function Page() {
+  const { user, userProfile, logout, loading, authError } = useAuth()
+  const { currentPage, selectedGroupId, selectedExpenseId, navigateTo } = useNavigation()
+  const { trackPageView, trackUserAction } = useAnalytics()
+  const [loadingTimeout, setLoadingTimeout] = useState(false)
+  const [joinGroupId, setJoinGroupId] = useState<string | null>(null)
 
-  const handleLogout = async () => {
-    try {
-      await logout()
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error)
+  // Verificar si hay un parámetro de grupo en la URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const groupId = urlParams.get("join")
+    if (groupId && user && !joinGroupId) {
+      setJoinGroupId(groupId)
+      navigateTo("group-join", groupId)
     }
+  }, [user, navigateTo, joinGroupId])
+
+  // Limpiar el parámetro cuando se navega fuera de group-join
+  useEffect(() => {
+    if (currentPage !== "group-join" && joinGroupId) {
+      setJoinGroupId(null)
+      // Limpiar la URL si no estamos en group-join
+      const url = new URL(window.location.href)
+      if (url.searchParams.has("join")) {
+        url.searchParams.delete("join")
+        window.history.replaceState({}, "", url.toString())
+      }
+    }
+  }, [currentPage, joinGroupId])
+
+  // Timeout para detectar si el loading se cuelga
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loading) {
+        setLoadingTimeout(true)
+        console.log("Loading timeout reached")
+      }
+    }, 15000)
+
+    return () => clearTimeout(timer)
+  }, [loading])
+
+  useEffect(() => {
+    if (user && currentPage) {
+      trackPageView(currentPage)
+    }
+  }, [currentPage, user, trackPageView])
+
+  useEffect(() => {
+    if (user && !loading) {
+      trackUserAction("login_success", {
+        user_id: user.uid,
+        login_method: "google",
+      })
+    }
+  }, [user, loading, trackUserAction])
+
+  const handleRefresh = () => {
+    window.location.reload()
   }
 
   const handleNavigateToGroup = (groupId: string) => {
     navigateTo("group-details", groupId)
   }
 
-  if (loading) {
+  // Si está cargando por más de 15 segundos, mostrar opción de refresh
+  if (loading && loadingTimeout) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Cargando...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
+        <div className="text-center space-y-6 max-w-md mx-auto p-6">
+          <div className="flex justify-center">
+            <div className="animate-bounce">
+              <Image src="/cow-logo.svg" alt="Loading" width={64} height={64} className="opacity-60" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-primary">¡Ups! Esto está tardando más de lo normal</h2>
+            <p className="text-muted-foreground">La vaca se quedó dormida. Intentemos despertarla.</p>
+            {authError && <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">Error: {authError}</p>}
+          </div>
+          <Button onClick={handleRefresh} className="bg-primary hover:bg-primary/90">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refrescar página
+          </Button>
         </div>
       </div>
     )
   }
 
-  if (!user) {
-    return <LoginScreen />
+  // Loading normal - Logo centrado
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="animate-bounce">
+              <Image src="/cow-logo.svg" alt="Loading" width={64} height={64} className="opacity-60" />
+            </div>
+          </div>
+          <p className="text-muted-foreground">Cargando tu rebaño...</p>
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const isProfileIncomplete = !user.paymentInfo || Object.keys(user.paymentInfo).length === 0
+  // Si no hay usuario, mostrar login
+  if (!user) {
+    return (
+      <>
+        <LoginScreen />
+        <Toaster />
+      </>
+    )
+  }
 
-  const renderContent = () => {
+  // Si hay error de permisos (usuario logueado pero sin acceso a Firestore)
+  if (user && !userProfile && authError?.includes("permission")) {
+    return (
+      <>
+        <FirebaseSetupInstructions />
+        <Toaster />
+      </>
+    )
+  }
+
+  const renderCurrentPage = () => {
     switch (currentPage) {
-      case "dashboard":
-        return <EnhancedDashboard />
-      case "groups":
-        return <GroupsDashboard />
-      case "group-details":
-        return <GroupDetailsPage groupId={currentGroupId!} />
       case "add-expense":
-        return <AddExpensePage groupId={currentGroupId} />
+        return selectedGroupId ? (
+          <AddExpensePage groupId={selectedGroupId} onNavigate={navigateTo} />
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
       case "profile":
-        return <UserProfilePage />
-      case "expense-detail":
-        return <ExpenseDetailPage expenseId={currentExpenseId!} />
-      case "debt-consolidation":
-        return <DebtConsolidationPage />
+        return (
+          <UserProfilePage
+            onNavigate={navigateTo}
+            returnTo={joinGroupId ? `group-join` : undefined}
+            returnGroupId={joinGroupId}
+          />
+        )
+      case "group-details":
+        return selectedGroupId ? (
+          <GroupDetailsPage groupId={selectedGroupId} onNavigate={navigateTo} />
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
       case "group-join":
-        return <GroupJoinPage />
-      case "group-chat":
-        return <GroupChat groupId={currentGroupId!} />
+        return selectedGroupId ? (
+          <GroupJoinPage groupId={selectedGroupId} onNavigate={navigateTo} />
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
+      case "debt-consolidation":
+        return <DebtConsolidationPage onNavigate={navigateTo} />
+      case "expense-detail":
+        return selectedGroupId && selectedExpenseId ? (
+          <ExpenseDetailPage groupId={selectedGroupId} expenseId={selectedExpenseId} onNavigate={navigateTo} />
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
       default:
-        return <EnhancedDashboard />
+        return <EnhancedDashboard onNavigate={navigateTo} />
     }
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header de navegación */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center justify-between px-4">
-          {/* Logo y nombre */}
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">V</span>
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
+      <Toaster />
+
+      {/* Header */}
+      <header className="bg-card/80 backdrop-blur-sm shadow-lg border-b border-primary/10 sticky top-0 z-30">
+        <div className="max-w-md mx-auto px-4">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-br from-primary to-primary/80 rounded-xl">
+                <Image
+                  src="/cow-logo.svg"
+                  alt="Vaquitapp"
+                  width={24}
+                  height={24}
+                  className="filter brightness-0 invert"
+                />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                  Vaquitapp
+                </h1>
+              </div>
             </div>
-            <span className="font-bold text-lg">Vaquitapp</span>
-          </div>
 
-          {/* Navegación */}
-          <div className="flex items-center space-x-2">
-            {/* Botón de inicio */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigateTo("dashboard")}
-              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-            >
-              <HomeIcon className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center space-x-2">
+              {/* Botón de Inicio */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigateTo("dashboard")}
+                className={`h-8 px-2 ${
+                  currentPage === "dashboard"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-primary"
+                }`}
+              >
+                <Home className="h-4 w-4 mr-1" />
+                <span className="text-xs">Inicio</span>
+              </Button>
 
-            {/* Botón de perfil */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigateTo("profile")}
-              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-            >
-              <UserIcon className="h-4 w-4" />
-            </Button>
+              {/* Botón de Perfil */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigateTo("profile")}
+                className={`h-8 px-2 ${
+                  currentPage === "profile" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-primary"
+                }`}
+              >
+                <User className="h-4 w-4 mr-1" />
+                <span className="text-xs">Perfil</span>
+              </Button>
 
-            {/* Notificaciones */}
-            <NotificationsDropdown onNavigateToGroup={handleNavigateToGroup} />
+              {/* Dropdown de Notificaciones */}
+              <NotificationsDropdown onNavigateToGroup={handleNavigateToGroup} />
 
-            {/* Indicador de perfil incompleto */}
-            {isProfileIncomplete && (
-              <span className="text-yellow-500 text-sm" title="Completa tu información de pago">
-                ⚠️
-              </span>
-            )}
+              {/* Indicador de perfil incompleto */}
+              {!userProfile?.paymentInfo && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigateTo("profile")}
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10 text-xs h-8"
+                >
+                  ⚠️
+                </Button>
+              )}
 
-            {/* Botón de cerrar sesión */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-            >
-              <LogOutIcon className="h-4 w-4" />
-            </Button>
+              {/* Botón de Salir */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={logout}
+                className="border-primary/20 hover:bg-primary/10 h-8 w-8 bg-transparent"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Contenido principal */}
-      <main className="container mx-auto px-4 py-6">{renderContent()}</main>
+      {/* Main content */}
+      <main className="max-w-md mx-auto px-4 py-6">{renderCurrentPage()}</main>
     </div>
   )
 }
