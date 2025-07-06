@@ -31,6 +31,7 @@ import { FriendsSelector } from "@/components/friends-selector"
 import { GroupChat } from "@/components/group-chat"
 import Image from "next/image"
 import { useAnalytics } from "@/hooks/use-analytics"
+import { createNotification } from "@/lib/notifications"
 
 interface GroupDetailsPageProps {
   groupId: string
@@ -177,6 +178,17 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
         confirmedBy: user.uid,
       })
 
+      // Crear notificación para el usuario que recibe el pago
+      const fromUserName = usersData[settlement.from]?.displayName || usersData[settlement.from]?.email || "Alguien"
+      const message = `${fromUserName} confirmó el pago de $${formatAmount(settlement.amount)}`
+
+      await createNotification({
+        userId: settlement.to,
+        type: "payment_marked",
+        message,
+        groupId,
+      })
+
       trackUserAction("transfer_confirmed", {
         amount: settlement.amount,
         group_id: groupId,
@@ -300,6 +312,20 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
       await updateDoc(groupRef, {
         members: newMembers,
       })
+
+      // Crear notificaciones para los nuevos miembros
+      const inviterName = usersData[user.uid]?.displayName || usersData[user.uid]?.email || "Alguien"
+      const message = `${inviterName} te agregó al grupo "${group.name}"`
+
+      const notificationPromises = pendingNewMembers.map((memberId) =>
+        createNotification({
+          userId: memberId,
+          type: "added_to_group",
+          message,
+          groupId,
+        }),
+      )
+      await Promise.all(notificationPromises)
 
       // Si se debe incluir en gastos existentes, actualizar todos los gastos
       if (includeInExistingExpenses && expenses.length > 0) {

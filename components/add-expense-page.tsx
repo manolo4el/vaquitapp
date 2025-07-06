@@ -14,6 +14,7 @@ import { ArrowLeft, Plus, Check } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { useAnalytics } from "@/hooks/use-analytics"
 import { parseInputNumber, formatAmount } from "@/lib/calculations"
+import { createNotificationsForGroupMembers } from "@/lib/notifications"
 
 interface AddExpensePageProps {
   groupId: string
@@ -90,6 +91,14 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
         participants,
         createdAt: new Date(),
       })
+
+      // Crear notificaciones para los miembros del grupo
+      if (user && group) {
+        const paidByName = usersData[paidBy]?.displayName || usersData[paidBy]?.email || "Alguien"
+        const message = `${paidByName} agregó un gasto de $${formatAmount(amount)} en "${expenseTitle}"`
+
+        await createNotificationsForGroupMembers(groupId, user.uid, "new_expense", message)
+      }
 
       trackExpenseAction("expense_added", amount, groupId)
 
