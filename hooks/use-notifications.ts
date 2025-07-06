@@ -3,11 +3,10 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, getDocs } from "firebase/firestore"
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc, getDocs } from "firebase/firestore"
 
 export interface Notification {
   id: string
-  userId: string
   type: "new_expense" | "added_to_group" | "payment_marked"
   message: string
   groupId: string
@@ -26,12 +25,9 @@ export function useNotifications() {
       return
     }
 
-    // Query para obtener notificaciones del usuario actual
-    const notificationsQuery = query(
-      collection(db, "notifications"),
-      where("userId", "==", user.uid),
-      orderBy("createdAt", "desc"),
-    )
+    // Query para obtener notificaciones del usuario actual usando subcolección
+    // /notifications/{userId}/items
+    const notificationsQuery = query(collection(db, "notifications", user.uid, "items"), orderBy("createdAt", "desc"))
 
     // Listener en tiempo real
     const unsubscribe = onSnapshot(
@@ -41,7 +37,6 @@ export function useNotifications() {
           const data = doc.data()
           return {
             id: doc.id,
-            userId: data.userId,
             type: data.type,
             message: data.message,
             groupId: data.groupId,
@@ -63,8 +58,11 @@ export function useNotifications() {
   const unreadCount = notifications.length
 
   const markAsRead = async (notificationId: string) => {
+    if (!user) return
+
     try {
-      await deleteDoc(doc(db, "notifications", notificationId))
+      // Eliminar de la subcolección del usuario
+      await deleteDoc(doc(db, "notifications", user.uid, "items", notificationId))
     } catch (error) {
       console.error("Error deleting notification:", error)
     }
@@ -74,8 +72,8 @@ export function useNotifications() {
     if (!user) return
 
     try {
-      const notificationsQuery = query(collection(db, "notifications"), where("userId", "==", user.uid))
-
+      // Obtener todas las notificaciones del usuario y eliminarlas
+      const notificationsQuery = query(collection(db, "notifications", user.uid, "items"))
       const snapshot = await getDocs(notificationsQuery)
       const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref))
       await Promise.all(deletePromises)
