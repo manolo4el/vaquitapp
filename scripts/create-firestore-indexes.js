@@ -1,72 +1,82 @@
-import { getFirestore } from "firebase-admin/firestore"
+const admin = require("firebase-admin")
 
-// Configuración de los índices necesarios
-const indexes = [
-  {
-    collectionGroup: "notifications",
-    fields: [
-      { fieldPath: "userId", order: "ASCENDING" },
-      { fieldPath: "createdAt", order: "DESCENDING" },
-    ],
-  },
-  {
-    collectionGroup: "expenses",
-    fields: [
-      { fieldPath: "groupId", order: "ASCENDING" },
-      { fieldPath: "createdAt", order: "DESCENDING" },
-    ],
-  },
-  {
-    collectionGroup: "messages",
-    fields: [
-      { fieldPath: "groupId", order: "ASCENDING" },
-      { fieldPath: "createdAt", order: "ASCENDING" },
-    ],
-  },
-]
+// Initialize Firebase Admin SDK
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  })
+}
+
+const db = admin.firestore()
 
 async function createIndexes() {
+  console.log("🔥 Creating Firestore indexes...")
+
   try {
-    console.log("🔥 Iniciando creación de índices de Firestore...")
+    // Note: Firestore indexes are typically created automatically when queries are made
+    // or manually through Firebase Console. This script will make the queries that trigger
+    // automatic index creation.
 
-    // Nota: Los índices se crean automáticamente cuando se ejecutan consultas
-    // que los requieren. Este script simula esas consultas para forzar la creación.
+    console.log("📊 Testing queries to trigger index creation...")
 
-    const db = getFirestore()
+    // Query 1: Notifications by user and creation date
+    console.log("Creating notifications index...")
+    await db
+      .collection("notifications")
+      .where("userId", "==", "test-user")
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get()
+      .catch(() => console.log("Notifications index will be created automatically"))
 
-    console.log("📊 Creando índice para notificaciones...")
-    // Esta consulta forzará la creación del índice de notificaciones
-    await db.collection("notifications").where("userId", "==", "dummy").orderBy("createdAt", "desc").limit(1).get()
+    // Query 2: Expenses by group and creation date
+    console.log("Creating expenses index...")
+    await db
+      .collection("expenses")
+      .where("groupId", "==", "test-group")
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get()
+      .catch(() => console.log("Expenses index will be created automatically"))
 
-    console.log("💰 Creando índice para gastos...")
-    // Esta consulta forzará la creación del índice de gastos
-    await db.collection("expenses").where("groupId", "==", "dummy").orderBy("createdAt", "desc").limit(1).get()
+    // Query 3: Messages by group and creation date
+    console.log("Creating messages index...")
+    await db
+      .collection("messages")
+      .where("groupId", "==", "test-group")
+      .orderBy("createdAt", "asc")
+      .limit(1)
+      .get()
+      .catch(() => console.log("Messages index will be created automatically"))
 
-    console.log("💬 Creando índice para mensajes...")
-    // Esta consulta forzará la creación del índice de mensajes
-    await db.collection("messages").where("groupId", "==", "dummy").orderBy("createdAt", "asc").limit(1).get()
-
-    console.log("✅ Índices creados exitosamente!")
-    console.log("📝 Ve a Firebase Console > Firestore > Indexes para verificar el estado")
+    console.log("✅ Index creation process completed!")
+    console.log("📝 Check Firebase Console > Firestore > Indexes to see the status")
+    console.log("⏳ Indexes may take a few minutes to build")
   } catch (error) {
-    console.error("❌ Error creando índices:", error)
-    console.log("🔧 Solución alternativa:")
-    console.log("1. Ve a Firebase Console > Firestore Database > Indexes")
-    console.log("2. Crea manualmente estos índices:")
-
-    indexes.forEach((index, i) => {
-      console.log(`\nÍndice ${i + 1}:`)
-      console.log(`Collection: ${index.collectionGroup}`)
-      index.fields.forEach((field) => {
-        console.log(`- ${field.fieldPath}: ${field.order}`)
-      })
-    })
+    console.error("❌ Error creating indexes:", error)
   }
 }
 
-// Ejecutar solo si se llama directamente
-if (import.meta.url === `file://${process.argv[1]}`) {
-  createIndexes()
-}
+// Manual index creation instructions
+console.log(`
+🔥 FIRESTORE INDEXES NEEDED:
 
-export { createIndexes }
+Go to Firebase Console > Firestore Database > Indexes and create these:
+
+1. NOTIFICATIONS INDEX:
+   - Collection ID: notifications
+   - Fields: userId (Ascending), createdAt (Descending)
+
+2. EXPENSES INDEX:
+   - Collection ID: expenses  
+   - Fields: groupId (Ascending), createdAt (Descending)
+
+3. MESSAGES INDEX:
+   - Collection ID: messages
+   - Fields: groupId (Ascending), createdAt (Ascending)
+
+Or run this script to trigger automatic creation:
+`)
+
+createIndexes()

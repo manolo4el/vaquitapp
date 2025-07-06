@@ -10,6 +10,7 @@ export interface Notification {
   read: boolean
   expenseId?: string
   amount?: number
+  paidBy?: string
 }
 
 export interface NotificationData {
@@ -23,4 +24,5 @@ export interface NotificationData {
   read: boolean
   expenseId?: string
   amount?: number
+  paidBy?: string
 }

@@ -1,7 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, query, where, orderBy, onSnapshot, doc, deleteDoc, addDoc, Timestamp } from "firebase/firestore"
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  doc,
+  deleteDoc,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import type { Notification, NotificationData } from "@/types/notifications"
@@ -19,76 +29,71 @@ export function useNotifications() {
       return
     }
 
-    console.log("🔔 Configurando listener de notificaciones para usuario:", user.uid)
+    console.log("🔔 Setting up notifications listener for user:", user.uid)
 
-    const notificationsRef = collection(db, "notifications")
-    const q = query(notificationsRef, where("userId", "==", user.uid), orderBy("createdAt", "desc"))
+    try {
+      const notificationsRef = collection(db, "notifications")
+      const q = query(notificationsRef, where("userId", "==", user.uid), orderBy("createdAt", "desc"))
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        console.log("📬 Notificaciones recibidas:", snapshot.size)
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          console.log("📬 Notifications snapshot received:", snapshot.size, "notifications")
 
-        const notificationsList: Notification[] = []
-        snapshot.forEach((doc) => {
-          const data = doc.data()
-          console.log("📄 Datos de notificación:", data)
-
-          notificationsList.push({
-            id: doc.id,
-            userId: data.userId,
-            type: data.type,
-            title: data.title,
-            message: data.message,
-            groupId: data.groupId,
-            groupName: data.groupName,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            read: data.read || false,
-            expenseId: data.expenseId,
-            amount: data.amount,
+          const notificationsList: Notification[] = []
+          snapshot.forEach((doc) => {
+            const data = doc.data()
+            notificationsList.push({
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt?.toDate() || new Date(),
+            } as Notification)
           })
-        })
 
-        setNotifications(notificationsList)
-        setLoading(false)
-        setError(null)
-      },
-      (err) => {
-        console.error("❌ Error obteniendo notificaciones:", err)
-        setError("Error al cargar notificaciones")
-        setLoading(false)
-      },
-    )
+          console.log("📋 Processed notifications:", notificationsList.length)
+          setNotifications(notificationsList)
+          setLoading(false)
+          setError(null)
+        },
+        (err) => {
+          console.error("❌ Error fetching notifications:", err)
+          setError("Error loading notifications")
+          setLoading(false)
+        },
+      )
 
-    return () => {
-      console.log("🔕 Desconectando listener de notificaciones")
-      unsubscribe()
+      return unsubscribe
+    } catch (err) {
+      console.error("❌ Error setting up notifications listener:", err)
+      setError("Error setting up notifications")
+      setLoading(false)
     }
   }, [user])
 
   const markAsRead = async (notificationId: string) => {
     try {
-      console.log("✅ Marcando notificación como leída:", notificationId)
+      console.log("✅ Marking notification as read:", notificationId)
       await deleteDoc(doc(db, "notifications", notificationId))
+
+      // Update local state
+      setNotifications((prev) => prev.filter((n) => n.id !== notificationId))
     } catch (error) {
-      console.error("❌ Error marcando notificación como leída:", error)
+      console.error("❌ Error marking notification as read:", error)
     }
   }
 
   const createNotification = async (notificationData: Omit<NotificationData, "createdAt">) => {
     try {
-      console.log("📝 Creando notificación:", notificationData)
+      console.log("🔔 Creating notification:", notificationData)
 
-      const docData = {
+      await addDoc(collection(db, "notifications"), {
         ...notificationData,
-        createdAt: Timestamp.now(),
-        read: false,
-      }
+        createdAt: serverTimestamp(),
+      })
 
-      await addDoc(collection(db, "notifications"), docData)
-      console.log("✅ Notificación creada exitosamente")
+      console.log("✅ Notification created successfully")
     } catch (error) {
-      console.error("❌ Error creando notificación:", error)
+      console.error("❌ Error creating notification:", error)
       throw error
     }
   }

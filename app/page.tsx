@@ -3,257 +3,183 @@
 import { useAuth } from "@/contexts/auth-context"
 import { LoginScreen } from "@/components/login-screen"
 import { EnhancedDashboard } from "@/components/enhanced-dashboard"
-import { GroupDetailsPage } from "@/components/group-details-page"
-import { AddExpensePage } from "@/components/add-expense-page"
-import { ExpenseDetailPage } from "@/components/expense-detail-page"
+import { GroupsDashboard } from "@/components/groups-dashboard"
 import { UserProfilePage } from "@/components/user-profile-page"
+import { AddExpensePage } from "@/components/add-expense-page"
+import { GroupDetailsPage } from "@/components/group-details-page"
+import { ExpenseDetailPage } from "@/components/expense-detail-page"
 import { GroupJoinPage } from "@/components/group-join-page"
 import { DebtConsolidationPage } from "@/components/debt-consolidation-page"
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { LogOut, User } from "lucide-react"
 import { NotificationsDropdown } from "@/components/notifications-dropdown"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { UserIcon, LogOutIcon, MenuIcon } from "lucide-react"
+import { useState } from "react"
+import { useNavigation } from "@/hooks/use-navigation"
 
-type Page = "dashboard" | "group" | "add-expense" | "expense-detail" | "profile" | "join-group" | "debt-consolidation"
+export default function Page() {
+  const { user, loading, signOut } = useAuth()
+  const { currentPage, setCurrentPage, pageProps } = useNavigation()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-export default function App() {
-  const { user, logout } = useAuth()
-  const [currentPage, setCurrentPage] = useState<Page>("dashboard")
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
-  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null)
-  const [joinCode, setJoinCode] = useState<string | null>(null)
-
-  // Reset page when user changes
-  useEffect(() => {
-    if (!user) {
-      setCurrentPage("dashboard")
-      setSelectedGroupId(null)
-      setSelectedExpenseId(null)
-    }
-  }, [user])
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
 
   if (!user) {
     return <LoginScreen />
   }
 
-  const handleLogout = async () => {
+  const handleSignOut = async () => {
     try {
-      await logout()
+      await signOut()
       setCurrentPage("dashboard")
-      setSelectedGroupId(null)
-      setSelectedExpenseId(null)
     } catch (error) {
-      console.error("Error al cerrar sesión:", error)
+      console.error("Error signing out:", error)
     }
   }
 
-  const navigateToGroup = (groupId: string) => {
-    setSelectedGroupId(groupId)
-    setCurrentPage("group")
-  }
-
-  const navigateToAddExpense = (groupId?: string) => {
-    if (groupId) {
-      setSelectedGroupId(groupId)
-    }
-    setCurrentPage("add-expense")
-  }
-
-  const navigateToExpenseDetail = (expenseId: string, groupId?: string) => {
-    setSelectedExpenseId(expenseId)
-    if (groupId) {
-      setSelectedGroupId(groupId)
-    }
-    setCurrentPage("expense-detail")
-  }
-
-  const navigateToProfile = () => {
-    setCurrentPage("profile")
-  }
-
-  const navigateToDashboard = () => {
-    setCurrentPage("dashboard")
-    setSelectedGroupId(null)
-    setSelectedExpenseId(null)
-  }
-
-  const navigateToJoinGroup = (code?: string) => {
-    if (code) {
-      setJoinCode(code)
-    }
-    setCurrentPage("join-group")
-  }
-
-  const navigateToDebtConsolidation = () => {
-    setCurrentPage("debt-consolidation")
-  }
+  const navigationItems = [
+    { id: "dashboard", label: "Inicio", icon: UserIcon },
+    { id: "profile", label: "Perfil", icon: UserIcon },
+  ]
 
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard":
-        return (
-          <EnhancedDashboard
-            onNavigateToGroup={navigateToGroup}
-            onNavigateToAddExpense={navigateToAddExpense}
-            onNavigateToExpenseDetail={navigateToExpenseDetail}
-            onNavigateToJoinGroup={navigateToJoinGroup}
-            onNavigateToDebtConsolidation={navigateToDebtConsolidation}
-          />
-        )
-      case "group":
-        return selectedGroupId ? (
-          <GroupDetailsPage
-            groupId={selectedGroupId}
-            onNavigateToAddExpense={navigateToAddExpense}
-            onNavigateToExpenseDetail={navigateToExpenseDetail}
-            onNavigateBack={navigateToDashboard}
-          />
-        ) : (
-          <EnhancedDashboard
-            onNavigateToGroup={navigateToGroup}
-            onNavigateToAddExpense={navigateToAddExpense}
-            onNavigateToExpenseDetail={navigateToExpenseDetail}
-            onNavigateToJoinGroup={navigateToJoinGroup}
-            onNavigateToDebtConsolidation={navigateToDebtConsolidation}
-          />
-        )
-      case "add-expense":
-        return (
-          <AddExpensePage
-            groupId={selectedGroupId}
-            onNavigateBack={() => {
-              if (selectedGroupId) {
-                setCurrentPage("group")
-              } else {
-                navigateToDashboard()
-              }
-            }}
-            onExpenseAdded={(groupId) => {
-              navigateToGroup(groupId)
-            }}
-          />
-        )
-      case "expense-detail":
-        return selectedExpenseId ? (
-          <ExpenseDetailPage
-            expenseId={selectedExpenseId}
-            groupId={selectedGroupId}
-            onNavigateBack={() => {
-              if (selectedGroupId) {
-                setCurrentPage("group")
-              } else {
-                navigateToDashboard()
-              }
-            }}
-          />
-        ) : (
-          <EnhancedDashboard
-            onNavigateToGroup={navigateToGroup}
-            onNavigateToAddExpense={navigateToAddExpense}
-            onNavigateToExpenseDetail={navigateToExpenseDetail}
-            onNavigateToJoinGroup={navigateToJoinGroup}
-            onNavigateToDebtConsolidation={navigateToDebtConsolidation}
-          />
-        )
+        return <EnhancedDashboard />
+      case "groups":
+        return <GroupsDashboard />
       case "profile":
-        return <UserProfilePage onNavigateBack={navigateToDashboard} />
+        return <UserProfilePage />
+      case "add-expense":
+        return <AddExpensePage groupId={pageProps?.groupId} />
+      case "group-details":
+        return <GroupDetailsPage groupId={pageProps?.groupId} />
+      case "expense-detail":
+        return <ExpenseDetailPage expenseId={pageProps?.expenseId} />
       case "join-group":
-        return (
-          <GroupJoinPage initialCode={joinCode} onNavigateBack={navigateToDashboard} onGroupJoined={navigateToGroup} />
-        )
+        return <GroupJoinPage inviteCode={pageProps?.inviteCode} />
       case "debt-consolidation":
-        return <DebtConsolidationPage onNavigateBack={navigateToDashboard} />
+        return <DebtConsolidationPage />
       default:
-        return (
-          <EnhancedDashboard
-            onNavigateToGroup={navigateToGroup}
-            onNavigateToAddExpense={navigateToAddExpense}
-            onNavigateToExpenseDetail={navigateToExpenseDetail}
-            onNavigateToJoinGroup={navigateToJoinGroup}
-            onNavigateToDebtConsolidation={navigateToDebtConsolidation}
-          />
-        )
+        return <EnhancedDashboard />
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header fijo */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo y título */}
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">V</span>
-              </div>
-              <h1 className="text-xl font-bold text-gray-900 hidden sm:block">Vaquitapp</h1>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between px-4">
+          {/* Logo y Título */}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">V</span>
+            </div>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Vaquitapp
+            </h1>
+          </div>
+
+          {/* Navegación Desktop */}
+          <nav className="hidden md:flex items-center gap-6">
+            {navigationItems.map((item) => {
+              const Icon = item.icon
+              return (
+                <Button
+                  key={item.id}
+                  variant={currentPage === item.id ? "default" : "ghost"}
+                  onClick={() => setCurrentPage(item.id)}
+                  className="flex items-center gap-2"
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Button>
+              )
+            })}
+          </nav>
+
+          {/* Acciones del Usuario */}
+          <div className="flex items-center gap-3">
+            {/* Notificaciones */}
+            <NotificationsDropdown />
+
+            {/* Menú de Usuario Desktop */}
+            <div className="hidden md:block">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={user.photoURL || ""} alt={user.displayName || ""} />
+                      <AvatarFallback>{user.displayName?.charAt(0) || user.email?.charAt(0) || "U"}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setCurrentPage("profile")}>
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    Perfil
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSignOut}>
+                    <LogOutIcon className="mr-2 h-4 w-4" />
+                    Salir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
-            {/* Navegación central */}
-            <nav className="hidden md:flex items-center space-x-1">
-              <Button
-                variant={currentPage === "dashboard" ? "default" : "ghost"}
-                size="sm"
-                onClick={navigateToDashboard}
-                className="flex items-center space-x-2"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Inicio</span>
-              </Button>
-
-              <Button
-                variant={currentPage === "profile" ? "default" : "ghost"}
-                size="sm"
-                onClick={navigateToProfile}
-                className="flex items-center space-x-2"
-              >
-                <User className="h-4 w-4" />
-                <span>Perfil</span>
-              </Button>
-            </nav>
-
-            {/* Acciones del usuario */}
-            <div className="flex items-center space-x-2">
-              {/* Notificaciones */}
-              <NotificationsDropdown />
-
-              {/* Navegación móvil */}
-              <div className="md:hidden flex items-center space-x-1">
-                <Button
-                  variant={currentPage === "dashboard" ? "default" : "ghost"}
-                  size="icon"
-                  onClick={navigateToDashboard}
-                >
-                  <LogOut className="h-4 w-4" />
-                </Button>
-
-                <Button
-                  variant={currentPage === "profile" ? "default" : "ghost"}
-                  size="icon"
-                  onClick={navigateToProfile}
-                >
-                  <User className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {/* Logout */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="flex items-center space-x-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Salir</span>
-              </Button>
+            {/* Menú Mobile */}
+            <div className="md:hidden">
+              <DropdownMenu open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <MenuIcon className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {navigationItems.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <DropdownMenuItem
+                        key={item.id}
+                        onClick={() => {
+                          setCurrentPage(item.id)
+                          setMobileMenuOpen(false)
+                        }}
+                      >
+                        <Icon className="mr-2 h-4 w-4" />
+                        {item.label}
+                      </DropdownMenuItem>
+                    )
+                  })}
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setCurrentPage("profile")
+                      setMobileMenuOpen(false)
+                    }}
+                  >
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    Perfil
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSignOut}>
+                    <LogOutIcon className="mr-2 h-4 w-4" />
+                    Salir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Contenido principal */}
-      <main className="pb-4">{renderPage()}</main>
+      {/* Contenido Principal */}
+      <main className="container mx-auto px-4 py-6">{renderPage()}</main>
     </div>
   )
 }

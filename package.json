@@ -6,6 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
+    "setup-indexes": "node scripts/create-firestore-indexes.js",
     "start": "next start"
   },
   "dependencies": {
