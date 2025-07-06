@@ -284,7 +284,7 @@ ${groupsList}${paymentInfo}
 
 ¡Gracias! 😊`
 
-    // Intentar usar Web Share API primero
+    // Intentar usar Web Share API nativa
     if (navigator.share) {
       try {
         await navigator.share({
@@ -293,48 +293,26 @@ ${groupsList}${paymentInfo}
         })
         return
       } catch (error) {
-        // Si falla o se cancela, continuar con el dialog
+        // Si el usuario cancela, no hacer nada más
         if (error.name === "AbortError") return
+        console.log("Share failed:", error)
       }
     }
 
-    // Fallback: mostrar opciones de compartir
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`
-    const telegramUrl = `https://t.me/share/url?text=${encodeURIComponent(message)}`
-    const emailSubject = "Recordatorio de deuda - Vaquitapp"
-    const emailUrl = `mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(message)}`
-
-    // Crear un dialog temporal para mostrar opciones
-    const shareDialog = document.createElement("div")
-    shareDialog.innerHTML = `
-      <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl p-6 max-w-sm w-full space-y-4">
-          <h3 class="text-lg font-semibold text-center">Compartir recordatorio</h3>
-          <div class="space-y-2">
-            <a href="${whatsappUrl}" target="_blank" class="flex items-center gap-3 p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
-              <span class="text-xl">📱</span>
-              <span>WhatsApp</span>
-            </a>
-            <a href="${telegramUrl}" target="_blank" class="flex items-center gap-3 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
-              <span class="text-xl">✈️</span>
-              <span>Telegram</span>
-            </a>
-            <a href="${emailUrl}" class="flex items-center gap-3 p-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
-              <span class="text-xl">📧</span>
-              <span>Email</span>
-            </a>
-            <button onclick="navigator.clipboard.writeText('${message.replace(/'/g, "\\'")}').then(() => { alert('¡Mensaje copiado!'); this.closest('.fixed').remove(); })" class="w-full flex items-center gap-3 p-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
-              <span class="text-xl">📋</span>
-              <span>Copiar mensaje</span>
-            </button>
-          </div>
-          <button onclick="this.closest('.fixed').remove()" class="w-full p-2 text-gray-500 hover:text-gray-700">
-            Cancelar
-          </button>
-        </div>
-      </div>
-    `
-    document.body.appendChild(shareDialog)
+    // Fallback: copiar al portapapeles si no hay Web Share API
+    try {
+      await navigator.clipboard.writeText(message)
+      toast({
+        title: "¡Mensaje copiado! 📋",
+        description: "El recordatorio se copió al portapapeles",
+      })
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "No se pudo compartir el recordatorio",
+        variant: "destructive",
+      })
+    }
   }
 
   const totalDebtsToMe = consolidatedDebtsToMe.reduce((sum, debt) => sum + debt.totalAmount, 0)
@@ -554,7 +532,7 @@ ${groupsList}${paymentInfo}
                     className="w-full border-accent/30 hover:bg-accent/10 text-accent-foreground bg-transparent"
                   >
                     <Share className="h-4 w-4 mr-2" />
-                    Enviar recordatorio a {debt.otherUserName}
+                    Enviar Recordatorio
                   </Button>
                 </CardContent>
               </Card>

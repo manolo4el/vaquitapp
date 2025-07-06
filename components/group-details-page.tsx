@@ -74,7 +74,6 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   const [selectedNewMembers, setSelectedNewMembers] = useState<string[]>([])
   const [showIncludeInExpensesDialog, setShowIncludeInExpensesDialog] = useState(false)
   const [pendingNewMembers, setPendingNewMembers] = useState<string[]>([])
-  const [showShareDialog, setShowShareDialog] = useState(false)
   const { trackGroupAction, trackUserAction } = useAnalytics()
 
   useEffect(() => {
@@ -218,9 +217,9 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
 
   const shareGroup = async () => {
     const shareUrl = `${window.location.origin}?join=${groupId}`
-    const shareText = "¡Te invitaron a un rebaño! Comparte este enlace para invitar amigos al rebaño"
+    const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄\n\nÚnete aquí: ${shareUrl}`
 
-    // Intentar usar la Web Share API nativa si está disponible
+    // Intentar usar la Web Share API nativa
     if (navigator.share) {
       try {
         await navigator.share({
@@ -228,64 +227,36 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
           text: shareText,
           url: shareUrl,
         })
+
+        trackGroupAction("group_share_attempted", groupId, {
+          share_method: "native",
+        })
         return
       } catch (error) {
-        // Si el usuario cancela o hay error, mostrar el dialog manual
-        console.log("Share cancelled or failed:", error)
+        // Si el usuario cancela, no hacer nada más
+        if (error.name === "AbortError") return
+        console.log("Share failed:", error)
       }
     }
 
-    // Fallback: mostrar dialog personalizado
-    setShowShareDialog(true)
-    trackGroupAction("group_share_attempted", groupId, {
-      share_method: navigator.share ? "native" : "manual",
-    })
-  }
-
-  const copyToClipboardShare = async () => {
-    const shareUrl = `${window.location.origin}?join=${groupId}`
+    // Fallback: copiar al portapapeles si no hay Web Share API
     try {
       await navigator.clipboard.writeText(shareUrl)
       toast({
         title: "¡Enlace copiado! 🔗",
         description: "Comparte este enlace para invitar amigos al rebaño",
       })
-      setShowShareDialog(false)
+
+      trackGroupAction("group_share_attempted", groupId, {
+        share_method: "clipboard",
+      })
     } catch (err) {
       toast({
         title: "Error",
-        description: "No se pudo copiar el enlace",
+        description: "No se pudo compartir el enlace",
         variant: "destructive",
       })
     }
-  }
-
-  const shareViaWhatsApp = () => {
-    const shareUrl = `${window.location.origin}?join=${groupId}`
-    const message = encodeURIComponent(
-      `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄\n\nÚnete aquí: ${shareUrl}`,
-    )
-    window.open(`https://wa.me/?text=${message}`, "_blank")
-    setShowShareDialog(false)
-  }
-
-  const shareViaTelegram = () => {
-    const shareUrl = `${window.location.origin}?join=${groupId}`
-    const message = encodeURIComponent(
-      `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄\n\nÚnete aquí: ${shareUrl}`,
-    )
-    window.open(`https://t.me/share/url?url=${shareUrl}&text=${message}`, "_blank")
-    setShowShareDialog(false)
-  }
-
-  const shareViaEmail = () => {
-    const shareUrl = `${window.location.origin}?join=${groupId}`
-    const subject = encodeURIComponent(`Invitación al rebaño: ${group.name}`)
-    const body = encodeURIComponent(
-      `¡Hola!\n\nTe invito a unirte al rebaño "${group.name}" en Vaquitapp para dividir gastos juntos. 🐄\n\nHaz clic en este enlace para unirte:\n${shareUrl}\n\n¡Nos vemos en el rebaño!`,
-    )
-    window.open(`mailto:?subject=${subject}&body=${body}`, "_blank")
-    setShowShareDialog(false)
   }
 
   const handleAddMembersClick = () => {
@@ -512,70 +483,6 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
               >
                 No, solo gastos futuros
               </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog para compartir grupo */}
-      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
-        <DialogContent className="max-w-sm sm:max-w-md mx-4">
-          <DialogHeader>
-            <DialogTitle className="text-primary flex items-center gap-2">
-              <Share className="h-5 w-5" />
-              Compartir Rebaño
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="text-center p-3 sm:p-4 bg-gradient-to-r from-accent/10 to-secondary/10 rounded-xl">
-              <div className="text-base sm:text-lg font-bold text-accent-foreground mb-2">"{group.name}"</div>
-              <div className="text-sm text-muted-foreground">Invita amigos a tu rebaño</div>
-            </div>
-
-            <div className="space-y-3">
-              <Button
-                onClick={shareViaWhatsApp}
-                className="w-full h-12 bg-[#25D366] hover:bg-[#20BA5A] text-white flex items-center justify-center gap-3"
-              >
-                <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
-                  <span className="text-[#25D366] font-bold text-sm">W</span>
-                </div>
-                Compartir por WhatsApp
-              </Button>
-
-              <Button
-                onClick={shareViaTelegram}
-                className="w-full h-12 bg-[#0088cc] hover:bg-[#006ba6] text-white flex items-center justify-center gap-3"
-              >
-                <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
-                  <span className="text-[#0088cc] font-bold text-sm">T</span>
-                </div>
-                Compartir por Telegram
-              </Button>
-
-              <Button
-                onClick={shareViaEmail}
-                variant="outline"
-                className="w-full h-12 border-primary/30 hover:bg-primary/10 text-primary bg-transparent flex items-center justify-center gap-3"
-              >
-                <div className="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center">
-                  <span className="text-primary font-bold text-sm">@</span>
-                </div>
-                Compartir por Email
-              </Button>
-
-              <Button
-                onClick={copyToClipboardShare}
-                variant="outline"
-                className="w-full h-12 border-accent/30 hover:bg-accent/10 text-accent-foreground bg-transparent flex items-center justify-center gap-3"
-              >
-                <Copy className="h-5 w-5" />
-                Copiar enlace
-              </Button>
-            </div>
-
-            <div className="text-xs text-muted-foreground text-center p-2 bg-muted/30 rounded">
-              💡 Tip: Tus amigos podrán unirse al rebaño usando cualquiera de estos métodos
             </div>
           </div>
         </DialogContent>
