@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, orderBy, onSnapshot, deleteDoc, doc, getDocs } from "firebase/firestore"
+import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, getDocs } from "firebase/firestore"
 
 export interface Notification {
   id: string
@@ -26,8 +26,12 @@ export function useNotifications() {
       return
     }
 
-    // Query para obtener notificaciones del usuario actual usando la estructura de las reglas
-    const notificationsQuery = query(collection(db, "notifications", user.uid, "items"), orderBy("createdAt", "desc"))
+    // Query para obtener notificaciones del usuario actual
+    const notificationsQuery = query(
+      collection(db, "notifications"),
+      where("userId", "==", user.uid),
+      orderBy("createdAt", "desc"),
+    )
 
     // Listener en tiempo real
     const unsubscribe = onSnapshot(
@@ -59,10 +63,8 @@ export function useNotifications() {
   const unreadCount = notifications.length
 
   const markAsRead = async (notificationId: string) => {
-    if (!user) return
-
     try {
-      await deleteDoc(doc(db, "notifications", user.uid, "items", notificationId))
+      await deleteDoc(doc(db, "notifications", notificationId))
     } catch (error) {
       console.error("Error deleting notification:", error)
     }
@@ -72,7 +74,8 @@ export function useNotifications() {
     if (!user) return
 
     try {
-      const notificationsQuery = query(collection(db, "notifications", user.uid, "items"))
+      const notificationsQuery = query(collection(db, "notifications"), where("userId", "==", user.uid))
+
       const snapshot = await getDocs(notificationsQuery)
       const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref))
       await Promise.all(deletePromises)
