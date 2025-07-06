@@ -10,7 +10,7 @@ import { GroupDetailsPage } from "@/components/group-details-page"
 import { GroupJoinPage } from "@/components/group-join-page"
 import { useNavigation } from "@/hooks/use-navigation"
 import { Button } from "@/components/ui/button"
-import { LogOut, RefreshCw, User, Home } from "lucide-react"
+import { LogOut, RefreshCw, User, Home, Bell } from "lucide-react"
 import Image from "next/image"
 import { Toaster } from "@/components/ui/toaster"
 import { useEffect, useState } from "react"
@@ -77,6 +77,11 @@ export default function Page() {
 
   const handleRefresh = () => {
     window.location.reload()
+  }
+
+  const handleNotifications = () => {
+    // TODO: Implementar funcionalidad de notificaciones
+    console.log("Notificaciones clicked")
   }
 
   // Si está cargando por más de 15 segundos, mostrar opción de refresh
@@ -235,6 +240,16 @@ export default function Page() {
               >
                 <User className="h-4 w-4 mr-1" />
                 <span className="text-xs">Perfil</span>
+              </Button>
+
+              {/* Botón de Notificaciones */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleNotifications}
+                className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+              >
+                <Bell className="h-4 w-4" />
               </Button>
 
               {/* Indicador de perfil incompleto */}
