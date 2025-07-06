@@ -14,6 +14,7 @@ import { ArrowLeft, Plus, Check } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { useAnalytics } from "@/hooks/use-analytics"
 import { parseInputNumber, formatAmount } from "@/lib/calculations"
+import { useNotifications } from "@/hooks/use-notifications"
 
 interface AddExpensePageProps {
   groupId: string
@@ -30,6 +31,7 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
   const [participants, setParticipants] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const { trackExpenseAction } = useAnalytics()
+  const { createNotification } = useNotifications()
 
   useEffect(() => {
     const loadGroupData = async () => {
@@ -90,6 +92,24 @@ export function AddExpensePage({ groupId, onNavigate }: AddExpensePageProps) {
         participants,
         createdAt: new Date(),
       })
+
+      // Create notifications for all participants except the one who paid
+      const notificationPromises = participants
+        .filter((participantId) => participantId !== paidBy)
+        .map((participantId) =>
+          createNotification(
+            participantId,
+            "expense_added",
+            "Nuevo gasto agregado",
+            `${usersData[paidBy]?.displayName || "Alguien"} agregó "${expenseTitle}" por $${formatAmount(amount)}`,
+            groupId,
+            group.name,
+            paidBy,
+            usersData[paidBy]?.displayName || usersData[paidBy]?.email,
+          ),
+        )
+
+      await Promise.all(notificationPromises)
 
       trackExpenseAction("expense_added", amount, groupId)
 

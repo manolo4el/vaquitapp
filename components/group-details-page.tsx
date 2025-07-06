@@ -31,6 +31,7 @@ import { FriendsSelector } from "@/components/friends-selector"
 import { GroupChat } from "@/components/group-chat"
 import Image from "next/image"
 import { useAnalytics } from "@/hooks/use-analytics"
+import { useNotifications } from "@/hooks/use-notifications"
 
 interface GroupDetailsPageProps {
   groupId: string
@@ -75,6 +76,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   const [pendingNewMembers, setPendingNewMembers] = useState<string[]>([])
   const [showShareDialog, setShowShareDialog] = useState(false)
   const { trackGroupAction, trackUserAction } = useAnalytics()
+  const { createNotification } = useNotifications()
 
   useEffect(() => {
     const loadGroupData = async () => {
@@ -165,6 +167,78 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
     }
   }
 
+  const addMembersToGroup = async (includeInExistingExpenses: boolean) => {
+    if (!user || pendingNewMembers.length === 0) return
+
+    try {
+      const groupRef = doc(db, "groups", groupId)
+      const newMembers = [...group.members, ...pendingNewMembers]
+
+      // Actualizar el grupo con los nuevos miembros
+      await updateDoc(groupRef, {
+        members: newMembers,
+      })
+
+      // Create notifications for new members
+      const notificationPromises = pendingNewMembers.map((memberId) =>
+        createNotification(
+          memberId,
+          "added_to_group",
+          "Te agregaron a un grupo",
+          `${user.displayName || "Alguien"} te agregó al rebaño "${group.name}"`,
+          groupId,
+          group.name,
+          user.uid,
+          user.displayName || user.email,
+        ),
+      )
+
+      await Promise.all(notificationPromises)
+
+      // Si se debe incluir en gastos existentes, actualizar todos los gastos
+      if (includeInExistingExpenses && expenses.length > 0) {
+        const batch = writeBatch(db)
+
+        // Obtener todos los gastos del grupo
+        const expensesSnapshot = await getDocs(collection(db, "groups", groupId, "expenses"))
+
+        expensesSnapshot.docs.forEach((expenseDoc) => {
+          const expenseData = expenseDoc.data()
+          const currentParticipants = expenseData.participants || group.members
+
+          // Agregar los nuevos miembros a los participantes de cada gasto
+          const updatedParticipants = [...new Set([...currentParticipants, ...pendingNewMembers])]
+
+          batch.update(expenseDoc.ref, {
+            participants: updatedParticipants,
+          })
+        })
+
+        await batch.commit()
+
+        toast({
+          title: "¡Miembros agregados! 👥",
+          description: `Se agregaron ${pendingNewMembers.length} nuevo${pendingNewMembers.length !== 1 ? "s" : ""} miembro${pendingNewMembers.length !== 1 ? "s" : ""} al rebaño y se incluyeron en todos los gastos existentes`,
+        })
+      } else {
+        toast({
+          title: "¡Miembros agregados! 👥",
+          description: `Se agregaron ${pendingNewMembers.length} nuevo${pendingNewMembers.length !== 1 ? "s" : ""} miembro${pendingNewMembers.length !== 1 ? "s" : ""} al rebaño`,
+        })
+      }
+
+      setSelectedNewMembers([])
+      setPendingNewMembers([])
+      setShowIncludeInExpensesDialog(false)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron agregar los miembros",
+        variant: "destructive",
+      })
+    }
+  }
+
   const confirmTransfer = async (settlement: Settlement) => {
     if (!user) return
 
@@ -176,6 +250,18 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
         confirmedAt: new Date(),
         confirmedBy: user.uid,
       })
+
+      // Create notification for the person who received the payment
+      await createNotification(
+        settlement.to,
+        "debt_paid",
+        "Deuda marcada como pagada",
+        `${getUserDisplayName(settlement.from, usersData)} marcó como pagada una deuda de $${formatAmount(settlement.amount)}`,
+        groupId,
+        group.name,
+        settlement.from,
+        getUserDisplayName(settlement.from, usersData),
+      )
 
       trackUserAction("transfer_confirmed", {
         amount: settlement.amount,
@@ -286,62 +372,6 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
     } else {
       // Si no hay gastos, agregar directamente
       addMembersToGroup(false)
-    }
-  }
-
-  const addMembersToGroup = async (includeInExistingExpenses: boolean) => {
-    if (!user || pendingNewMembers.length === 0) return
-
-    try {
-      const groupRef = doc(db, "groups", groupId)
-      const newMembers = [...group.members, ...pendingNewMembers]
-
-      // Actualizar el grupo con los nuevos miembros
-      await updateDoc(groupRef, {
-        members: newMembers,
-      })
-
-      // Si se debe incluir en gastos existentes, actualizar todos los gastos
-      if (includeInExistingExpenses && expenses.length > 0) {
-        const batch = writeBatch(db)
-
-        // Obtener todos los gastos del grupo
-        const expensesSnapshot = await getDocs(collection(db, "groups", groupId, "expenses"))
-
-        expensesSnapshot.docs.forEach((expenseDoc) => {
-          const expenseData = expenseDoc.data()
-          const currentParticipants = expenseData.participants || group.members
-
-          // Agregar los nuevos miembros a los participantes de cada gasto
-          const updatedParticipants = [...new Set([...currentParticipants, ...pendingNewMembers])]
-
-          batch.update(expenseDoc.ref, {
-            participants: updatedParticipants,
-          })
-        })
-
-        await batch.commit()
-
-        toast({
-          title: "¡Miembros agregados! 👥",
-          description: `Se agregaron ${pendingNewMembers.length} nuevo${pendingNewMembers.length !== 1 ? "s" : ""} miembro${pendingNewMembers.length !== 1 ? "s" : ""} al rebaño y se incluyeron en todos los gastos existentes`,
-        })
-      } else {
-        toast({
-          title: "¡Miembros agregados! 👥",
-          description: `Se agregaron ${pendingNewMembers.length} nuevo${pendingNewMembers.length !== 1 ? "s" : ""} miembro${pendingNewMembers.length !== 1 ? "s" : ""} al rebaño`,
-        })
-      }
-
-      setSelectedNewMembers([])
-      setPendingNewMembers([])
-      setShowIncludeInExpensesDialog(false)
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron agregar los miembros",
-        variant: "destructive",
-      })
     }
   }
 

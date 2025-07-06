@@ -1,5 +1,5 @@
 {
-  "name": "vacagastos",
+  "name": "vaquitapp",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -12,6 +12,7 @@
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
     "@radix-ui/react-aspect-ratio": "latest",
+    "@radix-ui/react-avatar": "^1.0.4",
     "@radix-ui/react-checkbox": "latest",
     "@radix-ui/react-collapsible": "latest",
     "@radix-ui/react-context-menu": "latest",
@@ -38,6 +39,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
+    "date-fns": "latest",
     "embla-carousel-react": "latest",
     "firebase": "latest",
     "input-otp": "latest",
@@ -61,7 +63,7 @@
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
-    "eslint-config-next": "14.0.0",
+    "eslint-config-next": "14.1.0",
     "postcss": "^8.5",
     "tailwindcss": "^3.3.0",
     "typescript": "^5"
