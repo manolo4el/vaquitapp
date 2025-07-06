@@ -7,14 +7,14 @@ import {
   where,
   orderBy,
   onSnapshot,
-  doc,
-  deleteDoc,
   addDoc,
+  deleteDoc,
+  doc,
   serverTimestamp,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
-import type { Notification, NotificationData } from "@/types/notifications"
+import type { Notification, CreateNotificationData } from "@/types/notifications"
 
 export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -31,69 +31,75 @@ export function useNotifications() {
 
     console.log("🔔 Setting up notifications listener for user:", user.uid)
 
-    try {
-      const notificationsRef = collection(db, "notifications")
-      const q = query(notificationsRef, where("userId", "==", user.uid), orderBy("createdAt", "desc"))
+    const notificationsRef = collection(db, "notifications")
+    const q = query(notificationsRef, where("userId", "==", user.uid), orderBy("createdAt", "desc"))
 
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          console.log("📬 Notifications snapshot received:", snapshot.size, "notifications")
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        console.log("🔔 Notifications snapshot received:", snapshot.size, "notifications")
 
-          const notificationsList: Notification[] = []
-          snapshot.forEach((doc) => {
-            const data = doc.data()
-            notificationsList.push({
-              id: doc.id,
-              ...data,
-              createdAt: data.createdAt?.toDate() || new Date(),
-            } as Notification)
+        const notificationsList: Notification[] = []
+        snapshot.forEach((doc) => {
+          const data = doc.data()
+          notificationsList.push({
+            id: doc.id,
+            userId: data.userId,
+            type: data.type,
+            title: data.title,
+            message: data.message,
+            groupId: data.groupId,
+            groupName: data.groupName,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            read: data.read || false,
+            expenseId: data.expenseId,
+            amount: data.amount,
+            paidBy: data.paidBy,
+            paidTo: data.paidTo,
           })
+        })
 
-          console.log("📋 Processed notifications:", notificationsList.length)
-          setNotifications(notificationsList)
-          setLoading(false)
-          setError(null)
-        },
-        (err) => {
-          console.error("❌ Error fetching notifications:", err)
-          setError("Error loading notifications")
-          setLoading(false)
-        },
-      )
+        setNotifications(notificationsList)
+        setLoading(false)
+        setError(null)
+      },
+      (err) => {
+        console.error("🔔 Error fetching notifications:", err)
+        setError("Error loading notifications")
+        setLoading(false)
+      },
+    )
 
-      return unsubscribe
-    } catch (err) {
-      console.error("❌ Error setting up notifications listener:", err)
-      setError("Error setting up notifications")
-      setLoading(false)
+    return () => {
+      console.log("🔔 Cleaning up notifications listener")
+      unsubscribe()
     }
   }, [user])
 
-  const markAsRead = async (notificationId: string) => {
+  const createNotification = async (data: CreateNotificationData) => {
     try {
-      console.log("✅ Marking notification as read:", notificationId)
-      await deleteDoc(doc(db, "notifications", notificationId))
+      console.log("🔔 Creating notification:", data)
 
-      // Update local state
-      setNotifications((prev) => prev.filter((n) => n.id !== notificationId))
+      const notificationData = {
+        ...data,
+        createdAt: serverTimestamp(),
+        read: false,
+      }
+
+      await addDoc(collection(db, "notifications"), notificationData)
+      console.log("🔔 Notification created successfully")
     } catch (error) {
-      console.error("❌ Error marking notification as read:", error)
+      console.error("🔔 Error creating notification:", error)
+      throw error
     }
   }
 
-  const createNotification = async (notificationData: Omit<NotificationData, "createdAt">) => {
+  const markAsRead = async (notificationId: string) => {
     try {
-      console.log("🔔 Creating notification:", notificationData)
-
-      await addDoc(collection(db, "notifications"), {
-        ...notificationData,
-        createdAt: serverTimestamp(),
-      })
-
-      console.log("✅ Notification created successfully")
+      await deleteDoc(doc(db, "notifications", notificationId))
+      console.log("🔔 Notification marked as read (deleted):", notificationId)
     } catch (error) {
-      console.error("❌ Error creating notification:", error)
+      console.error("🔔 Error marking notification as read:", error)
       throw error
     }
   }
@@ -105,7 +111,7 @@ export function useNotifications() {
     loading,
     error,
     unreadCount,
-    markAsRead,
     createNotification,
+    markAsRead,
   }
 }

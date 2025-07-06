@@ -6,7 +6,6 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "setup-indexes": "node scripts/create-firestore-indexes.js",
     "start": "next start"
   },
   "dependencies": {
@@ -45,7 +44,6 @@
     "date-fns": "latest",
     "embla-carousel-react": "latest",
     "firebase": "latest",
-    "firebase-admin": "latest",
     "input-otp": "latest",
     "lucide-react": "^0.454.0",
     "next": "14.2.16",
