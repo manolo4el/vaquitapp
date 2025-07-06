@@ -192,7 +192,13 @@ export function UserProfilePage({ onNavigate, returnTo, returnGroupId }: UserPro
               <div className="text-2xl font-bold text-primary">🐄</div>
               <div className="text-sm text-muted-foreground mt-1">Miembro desde</div>
               <div className="text-sm font-medium text-primary">
-                {userProfile?.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : "Hoy"}
+                {userProfile?.createdAt
+                  ? userProfile.createdAt instanceof Date
+                    ? userProfile.createdAt.toLocaleDateString("es-AR")
+                    : userProfile.createdAt.toDate?.()
+                      ? userProfile.createdAt.toDate().toLocaleDateString("es-AR")
+                      : new Date(userProfile.createdAt).toLocaleDateString("es-AR")
+                  : "Hoy"}
               </div>
             </div>
             <div className="text-center p-4 bg-gradient-to-br from-accent/10 to-secondary/10 rounded-xl">
