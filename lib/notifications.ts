@@ -10,7 +10,8 @@ export interface CreateNotificationData {
 
 export async function createNotification(data: CreateNotificationData) {
   try {
-    await addDoc(collection(db, "notifications"), {
+    // Usar la estructura que coincide con las reglas: /notifications/{userId}/items/{notificationId}
+    await addDoc(collection(db, "notifications", data.userId, "items"), {
       userId: data.userId,
       type: data.type,
       message: data.message,
