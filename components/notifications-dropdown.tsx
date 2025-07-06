@@ -22,9 +22,13 @@ export function NotificationsDropdown({ onNavigateToGroup }: NotificationsDropdo
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead, getNotificationIcon, formatTimeAgo } =
     useNotifications()
 
-  const handleNotificationClick = (notification: any) => {
-    markAsRead(notification.id)
+  const handleNotificationClick = async (notification: any) => {
+    await markAsRead(notification.id)
     onNavigateToGroup(notification.groupId)
+  }
+
+  const handleMarkAllAsRead = async () => {
+    await markAllAsRead()
   }
 
   return (
@@ -53,7 +57,7 @@ export function NotificationsDropdown({ onNavigateToGroup }: NotificationsDropdo
             <Button
               variant="ghost"
               size="sm"
-              onClick={markAllAsRead}
+              onClick={handleMarkAllAsRead}
               className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
             >
               <Check className="h-3 w-3 mr-1" />
@@ -72,9 +76,7 @@ export function NotificationsDropdown({ onNavigateToGroup }: NotificationsDropdo
             {notifications.map((notification) => (
               <DropdownMenuItem
                 key={notification.id}
-                className={`p-3 cursor-pointer flex flex-col items-start space-y-1 ${
-                  !notification.read ? "bg-primary/5" : ""
-                }`}
+                className="p-3 cursor-pointer flex flex-col items-start space-y-1 bg-primary/5"
                 onClick={() => handleNotificationClick(notification)}
               >
                 <div className="flex items-start justify-between w-full">
@@ -82,22 +84,19 @@ export function NotificationsDropdown({ onNavigateToGroup }: NotificationsDropdo
                     <span className="text-base">{getNotificationIcon(notification.type)}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p
-                          className={`text-sm font-medium truncate ${
-                            !notification.read ? "text-primary" : "text-foreground"
-                          }`}
-                        >
-                          {notification.title}
+                        <p className="text-sm font-medium truncate text-primary">
+                          {notification.type === "new_expense" && "Nuevo gasto"}
+                          {notification.type === "added_to_group" && "Agregado a grupo"}
+                          {notification.type === "payment_marked" && "Pago confirmado"}
                         </p>
                         <span className="text-xs text-muted-foreground ml-2">
-                          {formatTimeAgo(notification.timestamp)}
+                          {formatTimeAgo(notification.createdAt)}
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{notification.message}</p>
-                      <p className="text-xs text-primary/70 mt-1 font-medium">{notification.groupName}</p>
                     </div>
                   </div>
-                  {!notification.read && <div className="w-2 h-2 bg-primary rounded-full ml-2 mt-1 flex-shrink-0" />}
+                  <div className="w-2 h-2 bg-primary rounded-full ml-2 mt-1 flex-shrink-0" />
                 </div>
               </DropdownMenuItem>
             ))}

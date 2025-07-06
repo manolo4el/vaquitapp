@@ -2,61 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, getDocs } from "firebase/firestore"
 
 export interface Notification {
   id: string
-  title: string
+  userId: string
+  type: "new_expense" | "added_to_group" | "payment_marked"
   message: string
   groupId: string
-  groupName: string
-  timestamp: Date
-  read: boolean
-  type: "expense_added" | "payment_request" | "group_invite" | "debt_settled"
+  createdAt: Date
 }
-
-// Datos de ejemplo - en producción esto vendría de Firebase
-const mockNotifications: Notification[] = [
-  {
-    id: "1",
-    title: "Nuevo gasto agregado",
-    message: "Juan agregó un gasto de $15.000 en 'Viaje a Bariloche'",
-    groupId: "group1",
-    groupName: "Viaje a Bariloche",
-    timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutos atrás
-    read: false,
-    type: "expense_added",
-  },
-  {
-    id: "2",
-    title: "Solicitud de pago",
-    message: "María te solicita el pago de $8.500",
-    groupId: "group2",
-    groupName: "Cena de amigos",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 horas atrás
-    read: false,
-    type: "payment_request",
-  },
-  {
-    id: "3",
-    title: "Invitación a grupo",
-    message: "Carlos te invitó al grupo 'Asado del domingo'",
-    groupId: "group3",
-    groupName: "Asado del domingo",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 día atrás
-    read: false,
-    type: "group_invite",
-  },
-  {
-    id: "4",
-    title: "Deuda saldada",
-    message: "Ana confirmó el pago de $12.000",
-    groupId: "group1",
-    groupName: "Viaje a Bariloche",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 días atrás
-    read: true,
-    type: "debt_settled",
-  },
-]
 
 export function useNotifications() {
   const { user } = useAuth()
@@ -64,36 +20,77 @@ export function useNotifications() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (user) {
-      // Simular carga de notificaciones
-      setTimeout(() => {
-        setNotifications(mockNotifications)
-        setLoading(false)
-      }, 500)
+    if (!user) {
+      setNotifications([])
+      setLoading(false)
+      return
     }
+
+    // Query para obtener notificaciones del usuario actual
+    const notificationsQuery = query(
+      collection(db, "notifications"),
+      where("userId", "==", user.uid),
+      orderBy("createdAt", "desc"),
+    )
+
+    // Listener en tiempo real
+    const unsubscribe = onSnapshot(
+      notificationsQuery,
+      (snapshot) => {
+        const notificationsData = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            userId: data.userId,
+            type: data.type,
+            message: data.message,
+            groupId: data.groupId,
+            createdAt: data.createdAt?.toDate() || new Date(),
+          } as Notification
+        })
+        setNotifications(notificationsData)
+        setLoading(false)
+      },
+      (error) => {
+        console.error("Error fetching notifications:", error)
+        setLoading(false)
+      },
+    )
+
+    return () => unsubscribe()
   }, [user])
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = notifications.length
 
-  const markAsRead = (notificationId: string) => {
-    setNotifications((prev) =>
-      prev.map((notification) => (notification.id === notificationId ? { ...notification, read: true } : notification)),
-    )
+  const markAsRead = async (notificationId: string) => {
+    try {
+      await deleteDoc(doc(db, "notifications", notificationId))
+    } catch (error) {
+      console.error("Error deleting notification:", error)
+    }
   }
 
-  const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })))
+  const markAllAsRead = async () => {
+    if (!user) return
+
+    try {
+      const notificationsQuery = query(collection(db, "notifications"), where("userId", "==", user.uid))
+
+      const snapshot = await getDocs(notificationsQuery)
+      const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref))
+      await Promise.all(deletePromises)
+    } catch (error) {
+      console.error("Error deleting all notifications:", error)
+    }
   }
 
   const getNotificationIcon = (type: Notification["type"]) => {
     switch (type) {
-      case "expense_added":
+      case "new_expense":
         return "💰"
-      case "payment_request":
-        return "💳"
-      case "group_invite":
+      case "added_to_group":
         return "👥"
-      case "debt_settled":
+      case "payment_marked":
         return "✅"
       default:
         return "🔔"
@@ -110,11 +107,8 @@ export function useNotifications() {
     return `${Math.floor(diffInMinutes / 1440)}d`
   }
 
-  // Ordenar por timestamp descendente (más nuevas primero)
-  const sortedNotifications = [...notifications].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-
   return {
-    notifications: sortedNotifications,
+    notifications,
     unreadCount,
     loading,
     markAsRead,

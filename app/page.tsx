@@ -10,7 +10,7 @@ import { GroupDetailsPage } from "@/components/group-details-page"
 import { GroupJoinPage } from "@/components/group-join-page"
 import { useNavigation } from "@/hooks/use-navigation"
 import { Button } from "@/components/ui/button"
-import { LogOut, RefreshCw, User, Home } from "lucide-react"
+import { LogOut, RefreshCw, User } from "lucide-react"
 import Image from "next/image"
 import { Toaster } from "@/components/ui/toaster"
 import { useEffect, useState } from "react"
@@ -214,21 +214,6 @@ export default function Page() {
             </div>
 
             <div className="flex items-center space-x-2">
-              {/* Botón de Inicio */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigateTo("dashboard")}
-                className={`h-8 px-2 ${
-                  currentPage === "dashboard"
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-primary"
-                }`}
-              >
-                <Home className="h-4 w-4 mr-1" />
-                <span className="text-xs">Inicio</span>
-              </Button>
-
               {/* Botón de Perfil */}
               <Button
                 variant="ghost"
