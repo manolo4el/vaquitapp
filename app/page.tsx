@@ -1,7 +1,5 @@
 "use client"
 
-import { useState } from "react"
-
 import { useAuth } from "@/contexts/auth-context"
 import { LoginScreen } from "@/components/login-screen"
 import { FirebaseSetupInstructions } from "@/components/firebase-setup-instructions"
@@ -12,36 +10,36 @@ import { GroupDetailsPage } from "@/components/group-details-page"
 import { GroupJoinPage } from "@/components/group-join-page"
 import { useNavigation } from "@/hooks/use-navigation"
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { LogOut, RefreshCw, User } from "lucide-react"
 import Image from "next/image"
 import { Toaster } from "@/components/ui/toaster"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { DebtConsolidationPage } from "@/components/debt-consolidation-page"
 import { ExpenseDetailPage } from "@/components/expense-detail-page"
 import { useAnalytics } from "@/hooks/use-analytics"
-import { ErrorBoundary } from "@/components/error-boundary"
+import { NotificationsDropdown } from "@/components/notifications-dropdown"
 
 export default function Page() {
   const { user, userProfile, logout, loading, authError } = useAuth()
   const { currentPage, selectedGroupId, selectedExpenseId, navigateTo } = useNavigation()
   const { trackPageView, trackUserAction } = useAnalytics()
   const [loadingTimeout, setLoadingTimeout] = useState(false)
-  const [joinInvitationId, setJoinInvitationId] = useState<string | null>(null)
+  const [joinGroupId, setJoinGroupId] = useState<string | null>(null)
 
   // Verificar si hay un parámetro de grupo en la URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
-    const invitationId = urlParams.get("join")
-    if (invitationId && user && !joinInvitationId) {
-      setJoinInvitationId(invitationId)
-      navigateTo("group-join", invitationId)
+    const groupId = urlParams.get("join")
+    if (groupId && user && !joinGroupId) {
+      setJoinGroupId(groupId)
+      navigateTo("group-join", groupId)
     }
-  }, [user, navigateTo, joinInvitationId])
+  }, [user, navigateTo, joinGroupId])
 
   // Limpiar el parámetro cuando se navega fuera de group-join
   useEffect(() => {
-    if (currentPage !== "group-join" && joinInvitationId) {
-      setJoinInvitationId(null)
+    if (currentPage !== "group-join" && joinGroupId) {
+      setJoinGroupId(null)
       // Limpiar la URL si no estamos en group-join
       const url = new URL(window.location.href)
       if (url.searchParams.has("join")) {
@@ -49,7 +47,7 @@ export default function Page() {
         window.history.replaceState({}, "", url.toString())
       }
     }
-  }, [currentPage, joinInvitationId])
+  }, [currentPage, joinGroupId])
 
   // Timeout para detectar si el loading se cuelga
   useEffect(() => {
@@ -113,8 +111,18 @@ export default function Page() {
   // Loading normal - Logo centrado
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="animate-bounce">
+              <Image src="/cow-logo.svg" alt="Loading" width={64} height={64} className="opacity-60" />
+            </div>
+          </div>
+          <p className="text-muted-foreground">Cargando tu rebaño...</p>
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -139,25 +147,117 @@ export default function Page() {
     )
   }
 
-  return (
-    <ErrorBoundary>
-      <div className="min-h-screen bg-background">
-        {currentPage === "dashboard" && <EnhancedDashboard onNavigate={navigateTo} />}
-        {currentPage === "add-expense" && selectedGroupId && (
+  const renderCurrentPage = () => {
+    switch (currentPage) {
+      case "add-expense":
+        return selectedGroupId ? (
           <AddExpensePage groupId={selectedGroupId} onNavigate={navigateTo} />
-        )}
-        {currentPage === "profile" && <UserProfilePage onNavigate={navigateTo} />}
-        {currentPage === "group-details" && selectedGroupId && (
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
+      case "profile":
+        return (
+          <UserProfilePage
+            onNavigate={navigateTo}
+            returnTo={joinGroupId ? `group-join` : undefined}
+            returnGroupId={joinGroupId}
+          />
+        )
+      case "group-details":
+        return selectedGroupId ? (
           <GroupDetailsPage groupId={selectedGroupId} onNavigate={navigateTo} />
-        )}
-        {currentPage === "group-join" && joinInvitationId && (
-          <GroupJoinPage invitationId={joinInvitationId} onNavigate={navigateTo} />
-        )}
-        {currentPage === "debt-consolidation" && <DebtConsolidationPage onNavigate={navigateTo} />}
-        {currentPage === "expense-detail" && selectedGroupId && selectedExpenseId && (
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
+      case "group-join":
+        return selectedGroupId ? (
+          <GroupJoinPage groupId={selectedGroupId} onNavigate={navigateTo} />
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
+      case "debt-consolidation":
+        return <DebtConsolidationPage onNavigate={navigateTo} />
+      case "expense-detail":
+        return selectedGroupId && selectedExpenseId ? (
           <ExpenseDetailPage groupId={selectedGroupId} expenseId={selectedExpenseId} onNavigate={navigateTo} />
-        )}
-      </div>
-    </ErrorBoundary>
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
+      default:
+        return <EnhancedDashboard onNavigate={navigateTo} />
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
+      <Toaster />
+
+      {/* Header */}
+      <header className="bg-card/80 backdrop-blur-sm shadow-lg border-b border-primary/10 sticky top-0 z-30">
+        <div className="max-w-md mx-auto px-4">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-br from-primary to-primary/80 rounded-xl">
+                <Image
+                  src="/cow-logo.svg"
+                  alt="Vaquitapp"
+                  width={24}
+                  height={24}
+                  className="filter brightness-0 invert"
+                />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                  Vaquitapp
+                </h1>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {/* Botón de Perfil */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigateTo("profile")}
+                className={`h-8 px-2 ${
+                  currentPage === "profile" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-primary"
+                }`}
+              >
+                <User className="h-4 w-4 mr-1" />
+                <span className="text-xs">Perfil</span>
+              </Button>
+
+              {/* Dropdown de Notificaciones */}
+              <NotificationsDropdown onNavigateToGroup={handleNavigateToGroup} />
+
+              {/* Indicador de perfil incompleto */}
+              {!userProfile?.paymentInfo && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigateTo("profile")}
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10 text-xs h-8"
+                >
+                  ⚠️
+                </Button>
+              )}
+
+              {/* Botón de Salir */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={logout}
+                className="border-primary/20 hover:bg-primary/10 h-8 w-8 bg-transparent"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="max-w-md mx-auto px-4 py-6">{renderCurrentPage()}</main>
+    </div>
   )
 }

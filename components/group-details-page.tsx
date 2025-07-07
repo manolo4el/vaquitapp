@@ -32,7 +32,6 @@ import { GroupChat } from "@/components/group-chat"
 import Image from "next/image"
 import { useAnalytics } from "@/hooks/use-analytics"
 import { createNotification } from "@/lib/notifications"
-import { createGroupInvitation } from "@/lib/invitations"
 
 interface GroupDetailsPageProps {
   groupId: string
@@ -217,56 +216,44 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   }
 
   const shareGroup = async () => {
-    if (!user) return
+    const shareUrl = `${window.location.origin}?join=${groupId}`
+    const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄\n\nÚnete aquí: ${shareUrl}`
 
-    try {
-      // Crear o obtener invitación existente
-      const invitationId = await createGroupInvitation(groupId, user.uid)
-      const shareUrl = `${window.location.origin}?join=${invitationId}`
-      const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄\n\nÚnete aquí: ${shareUrl}`
-
-      // Intentar usar la Web Share API nativa
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: `Únete al rebaño: ${group.name}`,
-            text: shareText,
-            url: shareUrl,
-          })
-
-          trackGroupAction("group_share_attempted", groupId, {
-            share_method: "native",
-          })
-          return
-        } catch (error) {
-          // Si el usuario cancela, no hacer nada más
-          if (error.name === "AbortError") return
-          console.log("Share failed:", error)
-        }
-      }
-
-      // Fallback: copiar al portapapeles si no hay Web Share API
+    // Intentar usar la Web Share API nativa
+    if (navigator.share) {
       try {
-        await navigator.clipboard.writeText(shareUrl)
-        toast({
-          title: "¡Enlace copiado! 🔗",
-          description: "Comparte este enlace para invitar amigos al rebaño",
+        await navigator.share({
+          title: `Únete al rebaño: ${group.name}`,
+          text: shareText,
+          url: shareUrl,
         })
 
         trackGroupAction("group_share_attempted", groupId, {
-          share_method: "clipboard",
+          share_method: "native",
         })
-      } catch (err) {
-        toast({
-          title: "Error",
-          description: "No se pudo compartir el enlace",
-          variant: "destructive",
-        })
+        return
+      } catch (error) {
+        // Si el usuario cancela, no hacer nada más
+        if (error.name === "AbortError") return
+        console.log("Share failed:", error)
       }
-    } catch (error) {
+    }
+
+    // Fallback: copiar al portapapeles si no hay Web Share API
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      toast({
+        title: "¡Enlace copiado! 🔗",
+        description: "Comparte este enlace para invitar amigos al rebaño",
+      })
+
+      trackGroupAction("group_share_attempted", groupId, {
+        share_method: "clipboard",
+      })
+    } catch (err) {
       toast({
         title: "Error",
-        description: "No se pudo crear la invitación",
+        description: "No se pudo compartir el enlace",
         variant: "destructive",
       })
     }

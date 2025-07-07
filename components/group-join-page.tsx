@@ -6,18 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, updateDoc, arrayUnion } from "firebase/firestore"
+import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore"
 import { Users, AlertTriangle, CheckCircle, UserPlus } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { getGroupByInvitationId } from "@/lib/invitations"
 
 interface GroupJoinPageProps {
-  invitationId: string
+  groupId: string
   onNavigate: (page: string, groupId?: string) => void
 }
 
-export function GroupJoinPage({ invitationId, onNavigate }: GroupJoinPageProps) {
+export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
   const { user, userProfile } = useAuth()
   const [group, setGroup] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -27,12 +26,12 @@ export function GroupJoinPage({ invitationId, onNavigate }: GroupJoinPageProps) 
 
   useEffect(() => {
     const loadGroup = async () => {
-      if (!invitationId || !user) return
+      if (!groupId || !user) return
 
       try {
-        const groupData = await getGroupByInvitationId(invitationId)
-
-        if (groupData) {
+        const groupDoc = await getDoc(doc(db, "groups", groupId))
+        if (groupDoc.exists()) {
+          const groupData = { id: groupDoc.id, ...groupDoc.data() }
           setGroup(groupData)
 
           // Verificar si ya es miembro
@@ -40,18 +39,18 @@ export function GroupJoinPage({ invitationId, onNavigate }: GroupJoinPageProps) 
             setAlreadyMember(true)
           }
         } else {
-          setError("La invitación no existe, ha expirado o el enlace es inválido")
+          setError("El grupo no existe o el enlace es inválido")
         }
       } catch (err) {
-        setError("Error al cargar la invitación")
-        console.error("Error loading group by invitation:", err)
+        setError("Error al cargar el grupo")
+        console.error("Error loading group:", err)
       } finally {
         setLoading(false)
       }
     }
 
     loadGroup()
-  }, [invitationId, user])
+  }, [groupId, user])
 
   const joinGroup = async () => {
     if (!user || !group) return
@@ -69,7 +68,7 @@ export function GroupJoinPage({ invitationId, onNavigate }: GroupJoinPageProps) 
 
     setJoining(true)
     try {
-      const groupRef = doc(db, "groups", group.id)
+      const groupRef = doc(db, "groups", groupId)
       await updateDoc(groupRef, {
         members: arrayUnion(user.uid),
       })
@@ -140,7 +139,7 @@ export function GroupJoinPage({ invitationId, onNavigate }: GroupJoinPageProps) 
               <Button
                 onClick={() => {
                   window.history.replaceState({}, "", window.location.pathname)
-                  onNavigate("group-details", group.id)
+                  onNavigate("group-details", groupId)
                 }}
                 className="bg-primary hover:bg-primary/90"
               >
