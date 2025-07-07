@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore"
 import { ArrowLeft, Users, UserPlus, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
@@ -14,12 +14,13 @@ import { useAnalytics } from "@/hooks/use-analytics"
 import { createNotification } from "@/lib/notifications"
 
 interface GroupJoinPageProps {
-  groupId: string
+  invitationId: string
   onNavigate: (page: string, groupId?: string) => void
 }
 
-export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
+export function GroupJoinPage({ invitationId, onNavigate }: GroupJoinPageProps) {
   const { user, userProfile } = useAuth()
+  const [invitation, setInvitation] = useState<any>(null)
   const [group, setGroup] = useState<any>(null)
   const [usersData, setUsersData] = useState<any>({})
   const [loading, setLoading] = useState(true)
@@ -28,18 +29,35 @@ export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
   const { trackGroupAction } = useAnalytics()
 
   useEffect(() => {
-    const loadGroupData = async () => {
-      if (!groupId || !user) return
+    const loadInvitationData = async () => {
+      if (!invitationId || !user) return
 
       try {
         setLoading(true)
         setError(null)
 
+        // Cargar datos de la invitación
+        const invitationDoc = await getDoc(doc(db, "invitations", invitationId))
+
+        if (!invitationDoc.exists()) {
+          setError("La invitación no existe o ha expirado")
+          return
+        }
+
+        const invitationData = { id: invitationDoc.id, ...invitationDoc.data() }
+        setInvitation(invitationData)
+
+        // Verificar si la invitación ha expirado
+        if (invitationData.expiresAt && invitationData.expiresAt.toDate() < new Date()) {
+          setError("Esta invitación ha expirado")
+          return
+        }
+
         // Cargar datos del grupo
-        const groupDoc = await getDoc(doc(db, "groups", groupId))
+        const groupDoc = await getDoc(doc(db, "groups", invitationData.groupId))
 
         if (!groupDoc.exists()) {
-          setError("El grupo no existe o el enlace es inválido")
+          setError("El grupo no existe")
           return
         }
 
@@ -49,7 +67,7 @@ export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
         // Verificar si el usuario ya es miembro
         if (groupData.members.includes(user.uid)) {
           // Si ya es miembro, redirigir al grupo
-          onNavigate("group-details", groupId)
+          onNavigate("group-details", invitationData.groupId)
           return
         }
 
@@ -66,18 +84,18 @@ export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
 
         setUsersData(usersDataMap)
       } catch (error: any) {
-        console.error("Error loading group data:", error)
-        setError("Error al cargar la información del grupo")
+        console.error("Error loading invitation data:", error)
+        setError("Error al cargar la información de la invitación")
       } finally {
         setLoading(false)
       }
     }
 
-    loadGroupData()
-  }, [groupId, user, onNavigate])
+    loadInvitationData()
+  }, [invitationId, user, onNavigate])
 
   const joinGroup = async () => {
-    if (!user || !group || joining) return
+    if (!user || !group || !invitation || joining) return
 
     try {
       setJoining(true)
@@ -93,26 +111,19 @@ export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
         return
       }
 
-      // 1. Crear documento de invitación en Firestore
-      const invitationData = {
-        groupId: groupId,
-        groupName: group.name,
-        invitedUserId: user.uid,
-        invitedUserEmail: user.email,
-        invitedUserName: userProfile.displayName || userProfile.email || "Usuario",
-        status: "accepted",
-        acceptedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        invitedBy: group.createdBy || "system", // Si no hay createdBy, usar system
-      }
-
-      await addDoc(collection(db, "invitations"), invitationData)
-
-      // 2. Actualizar el grupo agregando al usuario a los miembros
-      const groupRef = doc(db, "groups", groupId)
+      // 1. Actualizar el grupo agregando al usuario a los miembros
+      const groupRef = doc(db, "groups", group.id)
       await updateDoc(groupRef, {
         members: arrayUnion(user.uid),
-        lastActivity: serverTimestamp(),
+        lastActivity: new Date(),
+      })
+
+      // 2. Actualizar la invitación como aceptada
+      const invitationRef = doc(db, "invitations", invitationId)
+      await updateDoc(invitationRef, {
+        status: "accepted",
+        acceptedAt: new Date(),
+        acceptedBy: user.uid,
       })
 
       // 3. Crear notificación para los miembros existentes
@@ -125,18 +136,19 @@ export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
           userId: memberId,
           type: "added_to_group",
           message,
-          groupId,
+          groupId: group.id,
         }),
       )
       await Promise.all(notificationPromises)
 
       // 4. Tracking de analytics
-      trackGroupAction("group_joined", groupId, {
+      trackGroupAction("group_joined", group.id, {
         user_id: user.uid,
         group_member_count: group.members.length + 1,
+        invitation_id: invitationId,
       })
 
-      console.log("✅ Invitación persistida en Firestore:", invitationData)
+      console.log("✅ Usuario unido al grupo exitosamente")
 
       toast({
         title: "¡Te uniste al rebaño! 🐄",
@@ -144,7 +156,7 @@ export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
       })
 
       // Redirigir al grupo
-      onNavigate("group-details", groupId)
+      onNavigate("group-details", group.id)
     } catch (error: any) {
       console.error("❌ Error joining group:", error)
       toast({
@@ -203,7 +215,7 @@ export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
     )
   }
 
-  if (!group) return null
+  if (!group || !invitation) return null
 
   return (
     <div className="space-y-6">
@@ -233,7 +245,7 @@ export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
         <CardContent className="space-y-4">
           <div className="text-center p-4 bg-gradient-to-r from-accent/10 to-secondary/10 rounded-xl">
             <div className="text-lg font-semibold text-accent-foreground mb-2">
-              ¡Te invitaron a unirte a este rebaño! 🐄
+              ¡{invitation.inviterName} te invitó a unirte a este rebaño! 🐄
             </div>
             <div className="text-sm text-muted-foreground">
               {group.members.length} miembro{group.members.length !== 1 ? "s" : ""} ya forman parte
@@ -308,15 +320,15 @@ export function GroupJoinPage({ groupId, onNavigate }: GroupJoinPageProps) {
             className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary h-12 text-base"
           >
             {joining ? (
-              <>
+              <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 Uniéndose...
-              </>
+              </div>
             ) : (
-              <>
+              <div className="flex items-center justify-center">
                 <UserPlus className="h-5 w-5 mr-2" />
                 Unirse al Rebaño
-              </>
+              </div>
             )}
           </Button>
 

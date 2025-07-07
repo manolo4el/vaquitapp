@@ -7,7 +7,17 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, onSnapshot, doc, getDoc, addDoc, updateDoc, getDocs, writeBatch } from "firebase/firestore"
+import {
+  collection,
+  onSnapshot,
+  doc,
+  getDoc,
+  addDoc,
+  updateDoc,
+  getDocs,
+  writeBatch,
+  serverTimestamp,
+} from "firebase/firestore"
 import {
   calculateBalancesWithTransfers,
   efficientTransfers,
@@ -238,46 +248,73 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   }
 
   const shareGroup = async () => {
-    // Construir URL una sola vez
-    const baseUrl = window.location.origin
-    const shareUrl = `${baseUrl}?join=${groupId}`
-    const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄`
+    if (!user) return
 
-    // Intentar usar la Web Share API nativa
-    if (navigator.share) {
+    try {
+      // Crear una invitación única
+      const invitationData = {
+        groupId: groupId,
+        groupName: group.name,
+        invitedBy: user.uid,
+        inviterName: usersData[user.uid]?.displayName || usersData[user.uid]?.email || "Alguien",
+        status: "pending",
+        createdAt: serverTimestamp(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Expira en 7 días
+      }
+
+      const invitationRef = await addDoc(collection(db, "invitations"), invitationData)
+      const invitationId = invitationRef.id
+
+      // Construir URL con el invitation ID
+      const baseUrl = window.location.origin
+      const shareUrl = `${baseUrl}?invitation=${invitationId}`
+      const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄`
+
+      // Intentar usar la Web Share API nativa
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `Únete al rebaño: ${group.name}`,
+            text: shareText,
+            url: shareUrl,
+          })
+
+          trackGroupAction("group_share_attempted", groupId, {
+            share_method: "native",
+            invitation_id: invitationId,
+          })
+          return
+        } catch (error: any) {
+          // Si el usuario cancela, no hacer nada más
+          if (error.name === "AbortError") return
+          console.log("Share failed:", error)
+        }
+      }
+
+      // Fallback: copiar al portapapeles si no hay Web Share API
       try {
-        await navigator.share({
-          title: `Únete al rebaño: ${group.name}`,
-          text: shareText,
-          url: shareUrl,
+        await navigator.clipboard.writeText(shareUrl)
+        toast({
+          title: "¡Enlace copiado! 🔗",
+          description: "Comparte este enlace para invitar amigos al rebaño",
         })
 
         trackGroupAction("group_share_attempted", groupId, {
-          share_method: "native",
+          share_method: "clipboard",
+          invitation_id: invitationId,
         })
-        return
-      } catch (error: any) {
-        // Si el usuario cancela, no hacer nada más
-        if (error.name === "AbortError") return
-        console.log("Share failed:", error)
+      } catch (err) {
+        toast({
+          title: "Error",
+          description: "No se pudo compartir el enlace",
+          variant: "destructive",
+        })
       }
-    }
-
-    // Fallback: copiar al portapapeles si no hay Web Share API
-    try {
-      await navigator.clipboard.writeText(shareUrl)
-      toast({
-        title: "¡Enlace copiado! 🔗",
-        description: "Comparte este enlace para invitar amigos al rebaño",
-      })
-
-      trackGroupAction("group_share_attempted", groupId, {
-        share_method: "clipboard",
-      })
-    } catch (err) {
+    } catch (error) {
+      console.error("Error creating invitation:", error)
       toast({
         title: "Error",
-        description: "No se pudo compartir el enlace",
+        description: "No se pudo crear la invitación",
         variant: "destructive",
       })
     }
