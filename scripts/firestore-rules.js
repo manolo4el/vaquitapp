@@ -132,17 +132,16 @@ service cloud.firestore {
     }
     
     // ========================================
-    // REGLAS PARA INVITACIONES (si las usas)
+    // REGLAS PARA INVITACIONES
     // ========================================
     match /invitations/{invitationId} {
-      // Leer: solo el invitado o quien invita
+      // Leer: solo el invitado o quien invita puede leer
       allow read: if request.auth != null && 
         (request.auth.uid == resource.data.invitedUserId || 
          request.auth.uid == resource.data.invitedBy);
       
       // Crear: cualquier usuario autenticado puede crear invitaciones
-      allow create: if request.auth != null && 
-        request.resource.data.invitedBy == request.auth.uid;
+      allow create: if request.auth != null;
       
       // Actualizar: solo el invitado puede actualizar (aceptar/rechazar)
       allow update: if request.auth != null && 
