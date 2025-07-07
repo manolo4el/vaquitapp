@@ -7,17 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import {
-  collection,
-  onSnapshot,
-  doc,
-  getDoc,
-  addDoc,
-  updateDoc,
-  getDocs,
-  writeBatch,
-  serverTimestamp,
-} from "firebase/firestore"
+import { collection, onSnapshot, doc, getDoc, addDoc, updateDoc, getDocs, writeBatch } from "firebase/firestore"
 import {
   calculateBalancesWithTransfers,
   efficientTransfers,
@@ -90,69 +80,47 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
     const loadGroupData = async () => {
       if (!groupId) return
 
-      try {
-        // Escuchar cambios en el documento del grupo
-        const groupUnsub = onSnapshot(
-          doc(db, "groups", groupId),
-          async (groupDoc) => {
-            if (groupDoc.exists()) {
-              const groupData = { id: groupDoc.id, ...groupDoc.data() }
-              setGroup(groupData)
+      // Escuchar cambios en el documento del grupo
+      const groupUnsub = onSnapshot(doc(db, "groups", groupId), async (groupDoc) => {
+        if (groupDoc.exists()) {
+          const groupData = { id: groupDoc.id, ...groupDoc.data() }
+          setGroup(groupData)
 
-              // Cargar datos de usuarios (incluyendo nuevos miembros)
-              const usersPromises = groupData.members.map((uid: string) => getDoc(doc(db, "users", uid)))
-              const usersSnaps = await Promise.all(usersPromises)
-              const usersDataMap: any = {}
-              usersSnaps.forEach((snap) => {
-                if (snap.exists()) {
-                  usersDataMap[snap.id] = snap.data()
-                }
-              })
-              setUsersData(usersDataMap)
+          // Cargar datos de usuarios (incluyendo nuevos miembros)
+          const usersPromises = groupData.members.map((uid: string) => getDoc(doc(db, "users", uid)))
+          const usersSnaps = await Promise.all(usersPromises)
+          const usersDataMap: any = {}
+          usersSnaps.forEach((snap) => {
+            if (snap.exists()) {
+              usersDataMap[snap.id] = snap.data()
             }
-          },
-          (error) => {
-            console.error("Error listening to group:", error)
-          },
-        )
-
-        // Escuchar cambios en gastos
-        const expensesUnsub = onSnapshot(
-          collection(db, "groups", groupId, "expenses"),
-          (snapshot) => {
-            const expensesData = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            })) as Expense[]
-            setExpenses(expensesData.sort((a, b) => b.createdAt?.toDate() - a.createdAt?.toDate()))
-          },
-          (error) => {
-            console.error("Error listening to expenses:", error)
-          },
-        )
-
-        // Escuchar cambios en transferencias
-        const transfersUnsub = onSnapshot(
-          collection(db, "groups", groupId, "transfers"),
-          (snapshot) => {
-            const transfersData = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            })) as Transfer[]
-            setTransfers(transfersData.sort((a, b) => b.confirmedAt?.toDate() - a.confirmedAt?.toDate()))
-          },
-          (error) => {
-            console.error("Error listening to transfers:", error)
-          },
-        )
-
-        return () => {
-          groupUnsub()
-          expensesUnsub()
-          transfersUnsub()
+          })
+          setUsersData(usersDataMap)
         }
-      } catch (error) {
-        console.error("Error setting up listeners:", error)
+      })
+
+      // Escuchar cambios en gastos
+      const expensesUnsub = onSnapshot(collection(db, "groups", groupId, "expenses"), (snapshot) => {
+        const expensesData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Expense[]
+        setExpenses(expensesData.sort((a, b) => b.createdAt?.toDate() - a.createdAt?.toDate()))
+      })
+
+      // Escuchar cambios en transferencias
+      const transfersUnsub = onSnapshot(collection(db, "groups", groupId, "transfers"), (snapshot) => {
+        const transfersData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Transfer[]
+        setTransfers(transfersData.sort((a, b) => b.confirmedAt?.toDate() - a.confirmedAt?.toDate()))
+      })
+
+      return () => {
+        groupUnsub()
+        expensesUnsub()
+        transfersUnsub()
       }
     }
 
@@ -248,73 +216,44 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   }
 
   const shareGroup = async () => {
-    if (!user) return
+    const shareUrl = `${window.location.origin}?join=${groupId}`
+    const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄\n\nÚnete aquí: ${shareUrl}`
 
-    try {
-      // Crear una invitación única
-      const invitationData = {
-        groupId: groupId,
-        groupName: group.name,
-        invitedBy: user.uid,
-        inviterName: usersData[user.uid]?.displayName || usersData[user.uid]?.email || "Alguien",
-        status: "pending",
-        createdAt: serverTimestamp(),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Expira en 7 días
-      }
-
-      const invitationRef = await addDoc(collection(db, "invitations"), invitationData)
-      const invitationId = invitationRef.id
-
-      // Construir URL con el invitation ID
-      const baseUrl = window.location.origin
-      const shareUrl = `${baseUrl}?invitation=${invitationId}`
-      const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄`
-
-      // Intentar usar la Web Share API nativa
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: `Únete al rebaño: ${group.name}`,
-            text: shareText,
-            url: shareUrl,
-          })
-
-          trackGroupAction("group_share_attempted", groupId, {
-            share_method: "native",
-            invitation_id: invitationId,
-          })
-          return
-        } catch (error: any) {
-          // Si el usuario cancela, no hacer nada más
-          if (error.name === "AbortError") return
-          console.log("Share failed:", error)
-        }
-      }
-
-      // Fallback: copiar al portapapeles si no hay Web Share API
+    // Intentar usar la Web Share API nativa
+    if (navigator.share) {
       try {
-        await navigator.clipboard.writeText(shareUrl)
-        toast({
-          title: "¡Enlace copiado! 🔗",
-          description: "Comparte este enlace para invitar amigos al rebaño",
+        await navigator.share({
+          title: `Únete al rebaño: ${group.name}`,
+          text: shareText,
+          url: shareUrl,
         })
 
         trackGroupAction("group_share_attempted", groupId, {
-          share_method: "clipboard",
-          invitation_id: invitationId,
+          share_method: "native",
         })
-      } catch (err) {
-        toast({
-          title: "Error",
-          description: "No se pudo compartir el enlace",
-          variant: "destructive",
-        })
+        return
+      } catch (error) {
+        // Si el usuario cancela, no hacer nada más
+        if (error.name === "AbortError") return
+        console.log("Share failed:", error)
       }
-    } catch (error) {
-      console.error("Error creating invitation:", error)
+    }
+
+    // Fallback: copiar al portapapeles si no hay Web Share API
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      toast({
+        title: "¡Enlace copiado! 🔗",
+        description: "Comparte este enlace para invitar amigos al rebaño",
+      })
+
+      trackGroupAction("group_share_attempted", groupId, {
+        share_method: "clipboard",
+      })
+    } catch (err) {
       toast({
         title: "Error",
-        description: "No se pudo crear la invitación",
+        description: "No se pudo compartir el enlace",
         variant: "destructive",
       })
     }
