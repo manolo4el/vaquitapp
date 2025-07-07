@@ -80,47 +80,69 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
     const loadGroupData = async () => {
       if (!groupId) return
 
-      // Escuchar cambios en el documento del grupo
-      const groupUnsub = onSnapshot(doc(db, "groups", groupId), async (groupDoc) => {
-        if (groupDoc.exists()) {
-          const groupData = { id: groupDoc.id, ...groupDoc.data() }
-          setGroup(groupData)
+      try {
+        // Escuchar cambios en el documento del grupo
+        const groupUnsub = onSnapshot(
+          doc(db, "groups", groupId),
+          async (groupDoc) => {
+            if (groupDoc.exists()) {
+              const groupData = { id: groupDoc.id, ...groupDoc.data() }
+              setGroup(groupData)
 
-          // Cargar datos de usuarios (incluyendo nuevos miembros)
-          const usersPromises = groupData.members.map((uid: string) => getDoc(doc(db, "users", uid)))
-          const usersSnaps = await Promise.all(usersPromises)
-          const usersDataMap: any = {}
-          usersSnaps.forEach((snap) => {
-            if (snap.exists()) {
-              usersDataMap[snap.id] = snap.data()
+              // Cargar datos de usuarios (incluyendo nuevos miembros)
+              const usersPromises = groupData.members.map((uid: string) => getDoc(doc(db, "users", uid)))
+              const usersSnaps = await Promise.all(usersPromises)
+              const usersDataMap: any = {}
+              usersSnaps.forEach((snap) => {
+                if (snap.exists()) {
+                  usersDataMap[snap.id] = snap.data()
+                }
+              })
+              setUsersData(usersDataMap)
             }
-          })
-          setUsersData(usersDataMap)
+          },
+          (error) => {
+            console.error("Error listening to group:", error)
+          },
+        )
+
+        // Escuchar cambios en gastos
+        const expensesUnsub = onSnapshot(
+          collection(db, "groups", groupId, "expenses"),
+          (snapshot) => {
+            const expensesData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            })) as Expense[]
+            setExpenses(expensesData.sort((a, b) => b.createdAt?.toDate() - a.createdAt?.toDate()))
+          },
+          (error) => {
+            console.error("Error listening to expenses:", error)
+          },
+        )
+
+        // Escuchar cambios en transferencias
+        const transfersUnsub = onSnapshot(
+          collection(db, "groups", groupId, "transfers"),
+          (snapshot) => {
+            const transfersData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            })) as Transfer[]
+            setTransfers(transfersData.sort((a, b) => b.confirmedAt?.toDate() - a.confirmedAt?.toDate()))
+          },
+          (error) => {
+            console.error("Error listening to transfers:", error)
+          },
+        )
+
+        return () => {
+          groupUnsub()
+          expensesUnsub()
+          transfersUnsub()
         }
-      })
-
-      // Escuchar cambios en gastos
-      const expensesUnsub = onSnapshot(collection(db, "groups", groupId, "expenses"), (snapshot) => {
-        const expensesData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Expense[]
-        setExpenses(expensesData.sort((a, b) => b.createdAt?.toDate() - a.createdAt?.toDate()))
-      })
-
-      // Escuchar cambios en transferencias
-      const transfersUnsub = onSnapshot(collection(db, "groups", groupId, "transfers"), (snapshot) => {
-        const transfersData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Transfer[]
-        setTransfers(transfersData.sort((a, b) => b.confirmedAt?.toDate() - a.confirmedAt?.toDate()))
-      })
-
-      return () => {
-        groupUnsub()
-        expensesUnsub()
-        transfersUnsub()
+      } catch (error) {
+        console.error("Error setting up listeners:", error)
       }
     }
 
@@ -216,8 +238,10 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   }
 
   const shareGroup = async () => {
-    const shareUrl = `${window.location.origin}?join=${groupId}`
-    const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄\n\nÚnete aquí: ${shareUrl}`
+    // Construir URL una sola vez
+    const baseUrl = window.location.origin
+    const shareUrl = `${baseUrl}?join=${groupId}`
+    const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄`
 
     // Intentar usar la Web Share API nativa
     if (navigator.share) {
@@ -232,7 +256,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
           share_method: "native",
         })
         return
-      } catch (error) {
+      } catch (error: any) {
         // Si el usuario cancela, no hacer nada más
         if (error.name === "AbortError") return
         console.log("Share failed:", error)
