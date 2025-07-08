@@ -34,9 +34,6 @@ export async function createGroupInvitation(groupId: string, createdBy: string):
   }
 }
 
-// Alias para compatibilidad
-export const createInvitation = createGroupInvitation
-
 export async function getInvitationById(invitationId: string): Promise<Invitation | null> {
   try {
     const invitationDoc = await getDoc(doc(db, "invitations", invitationId))

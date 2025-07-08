@@ -1,28 +1,26 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Plus, Users, Receipt, Bell, LogOut } from "lucide-react"
+import { collection, query, where, onSnapshot, addDoc, doc, getDoc, getDocs } from "firebase/firestore"
+import { calculateGroupBalances, getUserDisplayName, formatCurrency } from "@/lib/calculations"
+import { Plus, Users, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, Zap, Target } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
 import { GroupCard } from "./group-card"
-import { NotificationsDropdown } from "./notifications-dropdown"
-import { useNotifications } from "@/hooks/use-notifications"
-import { getUserDisplayName } from "@/lib/calculations"
-import Image from "next/image"
+import { createInvitation } from "@/lib/invitations"
 
 interface Group {
   id: string
   name: string
-  description?: string
   members: string[]
-  createdBy: string
   createdAt: any
-  currency: string
+  createdBy: string
 }
 
 interface EnhancedDashboardProps {
@@ -30,231 +28,346 @@ interface EnhancedDashboardProps {
 }
 
 export function EnhancedDashboard({ onNavigate }: EnhancedDashboardProps) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const [groups, setGroups] = useState<Group[]>([])
-  const [usersData, setUsersData] = useState<any>({})
+  const [newGroupName, setNewGroupName] = useState("")
   const [loading, setLoading] = useState(true)
-  const { notifications, unreadCount } = useNotifications()
+  const [usersData, setUsersData] = useState<{ [key: string]: any }>({})
+  const [groupsData, setGroupsData] = useState<{ [key: string]: any }>({})
 
+  // Cargar grupos del usuario
   useEffect(() => {
     if (!user) return
 
     const q = query(collection(db, "groups"), where("members", "array-contains", user.uid))
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const groupsData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Group[]
+    const unsubscribe = onSnapshot(
+      q,
+      async (snapshot) => {
+        const groupsData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Group[]
 
-      setGroups(groupsData)
+        setGroups(groupsData)
 
-      // Cargar datos de todos los usuarios únicos de todos los grupos
-      const allUserIds = new Set<string>()
-      groupsData.forEach((group) => {
-        group.members.forEach((memberId) => allUserIds.add(memberId))
-        allUserIds.add(group.createdBy)
-      })
+        // Cargar datos adicionales para cada grupo
+        const groupsInfo: { [key: string]: any } = {}
+        const allUserIds = new Set<string>()
 
-      const usersDataMap: any = {}
-      await Promise.all(
-        Array.from(allUserIds).map(async (userId) => {
+        for (const group of groupsData) {
+          // Agregar todos los miembros del grupo al set de usuarios
+          group.members.forEach((memberId) => allUserIds.add(memberId))
+
+          // Cargar gastos y transferencias del grupo
+          try {
+            const expensesSnapshot = await getDocs(collection(db, "groups", group.id, "expenses"))
+            const transfersSnapshot = await getDocs(collection(db, "groups", group.id, "transfers"))
+
+            const expenses = expensesSnapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }))
+
+            const transfers = transfersSnapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }))
+
+            const { balances, totalExpenses } = calculateGroupBalances(group.members, expenses, transfers)
+
+            groupsInfo[group.id] = {
+              expenses,
+              transfers,
+              balances,
+              totalExpenses,
+            }
+          } catch (error) {
+            console.error(`Error loading data for group ${group.id}:`, error)
+            groupsInfo[group.id] = {
+              expenses: [],
+              transfers: [],
+              balances: {},
+              totalExpenses: 0,
+            }
+          }
+        }
+
+        setGroupsData(groupsInfo)
+
+        // Cargar datos de todos los usuarios únicos
+        const usersInfo: { [key: string]: any } = {}
+        for (const userId of allUserIds) {
           try {
             const userDoc = await getDoc(doc(db, "users", userId))
             if (userDoc.exists()) {
-              usersDataMap[userId] = userDoc.data()
+              usersInfo[userId] = userDoc.data()
             }
           } catch (error) {
             console.error(`Error loading user ${userId}:`, error)
           }
-        }),
-      )
+        }
 
-      setUsersData(usersDataMap)
-      setLoading(false)
-    })
+        setUsersData(usersInfo)
+        setLoading(false)
+      },
+      (error) => {
+        console.error("Error fetching groups:", error)
+        setLoading(false)
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los grupos",
+          variant: "destructive",
+        })
+      },
+    )
 
-    return () => unsubscribe()
+    return unsubscribe
   }, [user])
 
-  const handleLogout = async () => {
+  const createGroup = async () => {
+    if (!newGroupName.trim() || !user) return
+
     try {
-      await logout()
+      await addDoc(collection(db, "groups"), {
+        name: newGroupName.trim(),
+        members: [user.uid],
+        createdAt: new Date(),
+        createdBy: user.uid,
+      })
+
+      setNewGroupName("")
+      toast({
+        title: "¡Grupo creado!",
+        description: `El grupo "${newGroupName}" ha sido creado exitosamente`,
+      })
     } catch (error) {
-      console.error("Error logging out:", error)
+      console.error("Error creating group:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo crear el grupo",
+        variant: "destructive",
+      })
     }
   }
 
+  const shareGroup = async (group: Group) => {
+    try {
+      const invitationId = await createInvitation(group.id, user!.uid)
+      const shareUrl = `${window.location.origin}?invite=${invitationId}`
+
+      if (navigator.share) {
+        await navigator.share({
+          title: `Únete a "${group.name}" en Vaquitapp`,
+          text: `¡Hola! Te invito a unirte a nuestro grupo "${group.name}" para dividir gastos fácilmente.`,
+          url: shareUrl,
+        })
+      } else {
+        await navigator.clipboard.writeText(shareUrl)
+        toast({
+          title: "¡Enlace copiado!",
+          description: "El enlace de invitación se copió al portapapeles",
+        })
+      }
+    } catch (error) {
+      console.error("Error sharing group:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo compartir el grupo",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Calcular estadísticas generales
+  const totalBalance = Object.values(groupsData).reduce((total, groupInfo) => {
+    const userBalance = groupInfo.balances?.[user?.uid || ""] || 0
+    return total + userBalance
+  }, 0)
+
+  const totalExpenses = Object.values(groupsData).reduce((total, groupInfo) => {
+    return total + (groupInfo.totalExpenses || 0)
+  }, 0)
+
+  const activeGroups = groups.length
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando...</p>
+      <div className="space-y-6">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando tu rebaño...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <Image src="/cow-logo.svg" alt="Vaquitapp" width={32} height={32} className="w-8 h-8" />
-                <h1 className="text-xl font-bold text-gray-900">Vaquitapp</h1>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              {/* Notifications */}
-              <NotificationsDropdown />
-
-              {/* User Profile */}
-              <div className="flex items-center space-x-3">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.photoURL || undefined} />
-                  <AvatarFallback>{user?.displayName?.charAt(0) || user?.email?.charAt(0) || "U"}</AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-medium text-gray-700 hidden sm:block">
-                  {user?.displayName || user?.email}
-                </span>
-              </div>
-
-              {/* Logout Button */}
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-600 hover:text-gray-900">
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:ml-2 sm:inline">Salir</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            ¡Hola, {getUserDisplayName(user?.uid || "", { [user?.uid || ""]: user })}!
-          </h2>
-          <p className="text-gray-600">Gestiona tus gastos compartidos de manera fácil y transparente</p>
+    <div className="space-y-6">
+      {/* Header con estadísticas */}
+      <div className="text-center space-y-4">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            ¡Hola, {getUserDisplayName(user?.uid || "", usersData)}! 👋
+          </h1>
+          <p className="text-muted-foreground">Administra tus gastos compartidos</p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-blue-100 rounded-full">
-                  <Plus className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Crear Grupo</h3>
-                  <p className="text-sm text-gray-600">Nuevo grupo de gastos</p>
-                </div>
+        {/* Estadísticas rápidas */}
+        <div className="grid grid-cols-3 gap-4">
+          <Card className="border-0 bg-gradient-to-br from-primary/10 to-primary/5">
+            <CardContent className="p-4 text-center">
+              <div className="flex items-center justify-center mb-2">
+                <Users className="h-5 w-5 text-primary" />
               </div>
+              <div className="text-2xl font-bold text-primary">{activeGroups}</div>
+              <div className="text-xs text-muted-foreground">Grupos</div>
             </CardContent>
           </Card>
 
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => onNavigate("user-profile")}>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-green-100 rounded-full">
-                  <Users className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Mi Perfil</h3>
-                  <p className="text-sm text-gray-600">Configurar cuenta</p>
-                </div>
+          <Card className="border-0 bg-gradient-to-br from-secondary/10 to-secondary/5">
+            <CardContent className="p-4 text-center">
+              <div className="flex items-center justify-center mb-2">
+                <DollarSign className="h-5 w-5 text-secondary" />
               </div>
+              <div className="text-2xl font-bold text-secondary">{formatCurrency(totalExpenses)}</div>
+              <div className="text-xs text-muted-foreground">Total gastado</div>
             </CardContent>
           </Card>
 
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => onNavigate("debt-consolidation")}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-purple-100 rounded-full">
-                  <Receipt className="h-6 w-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Consolidar</h3>
-                  <p className="text-sm text-gray-600">Ver todas las deudas</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Groups Section */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-semibold text-gray-900">Mis Grupos</h3>
-            <Badge variant="secondary" className="text-sm">
-              {groups.length} {groups.length === 1 ? "grupo" : "grupos"}
-            </Badge>
-          </div>
-
-          {groups.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                  <Users className="h-8 w-8 text-gray-400" />
-                </div>
-                <h4 className="text-lg font-medium text-gray-900 mb-2">No tienes grupos aún</h4>
-                <p className="text-gray-600 mb-4">Crea tu primer grupo para empezar a dividir gastos con tus amigos</p>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Crear Primer Grupo
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {groups.map((group) => (
-                <GroupCard key={group.id} group={group} usersData={usersData} onNavigate={onNavigate} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Recent Activity */}
-        {notifications.length > 0 && (
-          <div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">Actividad Reciente</h3>
-            <Card>
-              <CardContent className="p-6">
-                <div className="space-y-4">
-                  {notifications.slice(0, 3).map((notification) => (
-                    <div key={notification.id} className="flex items-start space-x-3">
-                      <div className="p-2 bg-blue-100 rounded-full">
-                        <Bell className="h-4 w-4 text-blue-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-900">{notification.message}</p>
-                        <p className="text-xs text-gray-500">{notification.createdAt.toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {notifications.length > 3 && (
-                  <div className="mt-4 pt-4 border-t">
-                    <Button variant="ghost" size="sm" className="w-full">
-                      Ver todas las notificaciones
-                    </Button>
-                  </div>
+          <Card className="border-0 bg-gradient-to-br from-accent/10 to-accent/5">
+            <CardContent className="p-4 text-center">
+              <div className="flex items-center justify-center mb-2">
+                {totalBalance >= 0 ? (
+                  <TrendingUp className="h-5 w-5 text-accent" />
+                ) : (
+                  <TrendingDown className="h-5 w-5 text-destructive" />
                 )}
-              </CardContent>
-            </Card>
+              </div>
+              <div className={`text-2xl font-bold ${totalBalance >= 0 ? "text-accent" : "text-destructive"}`}>
+                {formatCurrency(Math.abs(totalBalance))}
+              </div>
+              <div className="text-xs text-muted-foreground">{totalBalance >= 0 ? "Te deben" : "Debes"}</div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Crear nuevo grupo */}
+      <Card className="border-0 bg-gradient-to-br from-card to-primary/5">
+        <CardHeader>
+          <CardTitle className="text-lg text-primary flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+            Crear Nuevo Grupo
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Nombre del grupo (ej: Viaje a Bariloche)"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  createGroup()
+                }
+              }}
+              className="border-primary/20 focus:border-primary"
+            />
+            <Button
+              onClick={createGroup}
+              disabled={!newGroupName.trim()}
+              className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary px-6"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Crear
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Lista de grupos */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-primary">Tus Grupos</h2>
+          <Badge variant="secondary" className="bg-secondary/20">
+            {groups.length} {groups.length === 1 ? "grupo" : "grupos"}
+          </Badge>
+        </div>
+
+        {groups.length === 0 ? (
+          <Card className="border-0 bg-gradient-to-br from-muted/30 to-secondary/10">
+            <CardContent className="text-center py-12">
+              <div className="space-y-4">
+                <div className="text-6xl">🐄</div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold text-primary">¡Tu primer rebaño te espera!</h3>
+                  <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                    Crea tu primer grupo para empezar a dividir gastos con amigos y familia
+                  </p>
+                </div>
+                <Button
+                  onClick={() =>
+                    document.querySelector<HTMLInputElement>('input[placeholder*="Nombre del grupo"]')?.focus()
+                  }
+                  className="bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-accent-foreground"
+                >
+                  <Zap className="h-4 w-4 mr-2" />
+                  ¡Empezar ahora!
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {groups.map((group) => {
+              const groupInfo = groupsData[group.id] || {
+                balances: {},
+                totalExpenses: 0,
+                expenses: [],
+              }
+
+              return (
+                <GroupCard
+                  key={group.id}
+                  group={group}
+                  userBalance={groupInfo.balances[user?.uid || ""] || 0}
+                  totalExpenses={groupInfo.totalExpenses}
+                  recentExpenses={groupInfo.expenses.slice(-3)}
+                  usersData={usersData}
+                  onNavigate={onNavigate}
+                  onShare={() => shareGroup(group)}
+                />
+              )
+            })}
           </div>
         )}
-      </main>
+      </div>
+
+      {/* Acciones rápidas */}
+      {groups.length > 0 && (
+        <>
+          <Separator />
+          <Card className="border-0 bg-gradient-to-br from-accent/10 to-secondary/10">
+            <CardHeader>
+              <CardTitle className="text-lg text-primary flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                Acciones Rápidas
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={() => onNavigate("debt-consolidation")}
+                variant="outline"
+                className="w-full justify-start border-primary/20 hover:bg-primary/10"
+              >
+                <ArrowUpRight className="h-4 w-4 mr-2" />
+                Ver consolidación de deudas
+              </Button>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   )
 }
