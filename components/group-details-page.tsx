@@ -217,7 +217,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
 
   const shareGroup = async () => {
     const shareUrl = `${window.location.origin}?join=${groupId}`
-    const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄\n\nÚnete aquí: ${shareUrl}`
+    const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄`
 
     // Intentar usar la Web Share API nativa
     if (navigator.share) {
