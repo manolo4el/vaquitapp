@@ -1,43 +1,49 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore"
-import {
-  calculateBalancesWithTransfers,
-  efficientTransfers,
-  getUserDisplayName,
-  formatAmount,
-} from "@/lib/calculations"
-import { ArrowLeft, Users, ArrowRight, Share, CreditCard } from "lucide-react"
-import { toast } from "@/hooks/use-toast"
-import Image from "next/image"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ArrowLeft, Users, DollarSign, TrendingUp, TrendingDown, Share2 } from "lucide-react"
+import { calculateBalances, getUserDisplayName } from "@/lib/calculations"
+import { toast } from "sonner"
 
-interface DebtConsolidationPageProps {
-  onNavigate: (page: string, groupId?: string) => void
-}
-
-interface GroupData {
+interface Group {
   id: string
   name: string
   members: string[]
-  expenses: any[]
-  transfers: any[]
+  currency: string
+}
+
+interface Expense {
+  id: string
+  amount: number
+  paidBy: string
+  splitBetween: string[]
+  groupId: string
 }
 
 interface ConsolidatedDebt {
-  to: string
-  amount: number
-  groups: { groupId: string; groupName: string; amount: number }[]
+  groupId: string
+  groupName: string
+  currency: string
+  balance: number
+  creditors: { userId: string; amount: number }[]
+  debtors: { userId: string; amount: number }[]
+}
+
+interface DebtConsolidationPageProps {
+  onNavigate: (page: string, param?: string) => void
 }
 
 export function DebtConsolidationPage({ onNavigate }: DebtConsolidationPageProps) {
   const { user } = useAuth()
-  const [groups, setGroups] = useState<GroupData[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
+  const [expenses, setExpenses] = useState<Expense[]>([])
   const [usersData, setUsersData] = useState<any>({})
   const [consolidatedDebts, setConsolidatedDebts] = useState<ConsolidatedDebt[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,342 +51,338 @@ export function DebtConsolidationPage({ onNavigate }: DebtConsolidationPageProps
   useEffect(() => {
     if (!user) return
 
-    const unsubscribes: (() => void)[] = []
+    // Cargar grupos del usuario
+    const groupsQuery = query(collection(db, "groups"), where("members", "array-contains", user.uid))
 
-    const loadUserGroups = async () => {
-      try {
-        // Obtener grupos donde el usuario es miembro
-        const groupsQuery = query(collection(db, "groups"), where("members", "array-contains", user.uid))
+    const unsubscribeGroups = onSnapshot(groupsQuery, async (snapshot) => {
+      const groupsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Group[]
 
-        const groupsUnsub = onSnapshot(groupsQuery, async (snapshot) => {
-          const groupsData: GroupData[] = []
-          const allUserIds = new Set<string>()
+      setGroups(groupsData)
 
-          for (const groupDoc of snapshot.docs) {
-            const groupData = { id: groupDoc.id, ...groupDoc.data() }
+      // Cargar datos de usuarios de todos los grupos
+      const allUserIds = new Set<string>()
+      groupsData.forEach((group) => {
+        group.members.forEach((memberId) => allUserIds.add(memberId))
+      })
 
-            // Agregar todos los miembros del grupo para cargar sus datos
-            groupData.members.forEach((memberId: string) => allUserIds.add(memberId))
-
-            // Cargar gastos del grupo
-            const expensesUnsub = onSnapshot(collection(db, "groups", groupDoc.id, "expenses"), (expensesSnapshot) => {
-              const expenses = expensesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-
-              // Cargar transferencias del grupo
-              const transfersUnsub = onSnapshot(
-                collection(db, "groups", groupDoc.id, "transfers"),
-                (transfersSnapshot) => {
-                  const transfers = transfersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-
-                  // Actualizar el grupo con gastos y transferencias
-                  const updatedGroup = { ...groupData, expenses, transfers }
-
-                  setGroups((prevGroups) => {
-                    const existingIndex = prevGroups.findIndex((g) => g.id === groupDoc.id)
-                    if (existingIndex >= 0) {
-                      const newGroups = [...prevGroups]
-                      newGroups[existingIndex] = updatedGroup
-                      return newGroups
-                    } else {
-                      return [...prevGroups, updatedGroup]
-                    }
-                  })
-                },
-              )
-
-              unsubscribes.push(transfersUnsub)
-            })
-
-            unsubscribes.push(expensesUnsub)
-          }
-
-          // Cargar datos de todos los usuarios
-          const usersPromises = Array.from(allUserIds).map((uid) => getDoc(doc(db, "users", uid)))
-          const usersSnaps = await Promise.all(usersPromises)
-          const usersDataMap: any = {}
-          usersSnaps.forEach((snap) => {
-            if (snap.exists()) {
-              usersDataMap[snap.id] = snap.data()
+      const usersDataMap: any = {}
+      await Promise.all(
+        Array.from(allUserIds).map(async (userId) => {
+          try {
+            const userDoc = await getDoc(doc(db, "users", userId))
+            if (userDoc.exists()) {
+              usersDataMap[userId] = userDoc.data()
             }
-          })
-          setUsersData(usersDataMap)
-          setLoading(false)
-        })
+          } catch (error) {
+            console.error(`Error loading user ${userId}:`, error)
+          }
+        }),
+      )
+      setUsersData(usersDataMap)
+    })
 
-        unsubscribes.push(groupsUnsub)
-      } catch (error) {
-        console.error("Error loading groups:", error)
-        setLoading(false)
-      }
-    }
+    // Cargar gastos de todos los grupos
+    const expensesQuery = query(collection(db, "expenses"))
 
-    loadUserGroups()
+    const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
+      const expensesData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Expense[]
+
+      setExpenses(expensesData)
+      setLoading(false)
+    })
 
     return () => {
-      unsubscribes.forEach((unsub) => unsub())
+      unsubscribeGroups()
+      unsubscribeExpenses()
     }
   }, [user])
 
   useEffect(() => {
-    if (groups.length === 0 || !user) return
+    if (groups.length > 0 && expenses.length > 0) {
+      const consolidated: ConsolidatedDebt[] = groups.map((group) => {
+        const groupExpenses = expenses.filter((expense) => expense.groupId === group.id)
+        const balances = calculateBalances(groupExpenses, group.members)
 
-    // Calcular deudas consolidadas
-    const debtsMap = new Map<string, ConsolidatedDebt>()
+        const creditors = Object.entries(balances)
+          .filter(([_, balance]) => (balance as number) > 0)
+          .map(([userId, amount]) => ({ userId, amount: amount as number }))
+          .sort((a, b) => b.amount - a.amount)
 
-    groups.forEach((group) => {
-      const balances = calculateBalancesWithTransfers(group.members, group.expenses, group.transfers)
-      const settlements = efficientTransfers(balances)
+        const debtors = Object.entries(balances)
+          .filter(([_, balance]) => (balance as number) < 0)
+          .map(([userId, amount]) => ({ userId, amount: Math.abs(amount as number) }))
+          .sort((a, b) => b.amount - a.amount)
 
-      // Filtrar solo las deudas del usuario actual
-      const userDebts = settlements.filter((settlement) => settlement.from === user.uid)
-
-      userDebts.forEach((debt) => {
-        const existingDebt = debtsMap.get(debt.to)
-        if (existingDebt) {
-          existingDebt.amount += debt.amount
-          existingDebt.groups.push({
-            groupId: group.id,
-            groupName: group.name,
-            amount: debt.amount,
-          })
-        } else {
-          debtsMap.set(debt.to, {
-            to: debt.to,
-            amount: debt.amount,
-            groups: [
-              {
-                groupId: group.id,
-                groupName: group.name,
-                amount: debt.amount,
-              },
-            ],
-          })
+        return {
+          groupId: group.id,
+          groupName: group.name,
+          currency: group.currency,
+          balance: balances[user?.uid || ""] || 0,
+          creditors,
+          debtors,
         }
       })
-    })
 
-    const consolidatedArray = Array.from(debtsMap.values()).sort((a, b) => b.amount - a.amount)
-    setConsolidatedDebts(consolidatedArray)
-  }, [groups, user])
-
-  const shareDebtReminder = async (debt: ConsolidatedDebt) => {
-    const userName = usersData[user?.uid || ""]?.displayName || usersData[user?.uid || ""]?.email || "Alguien"
-    const recipientName = getUserDisplayName(debt.to, usersData)
-
-    const groupsList = debt.groups.map((g) => `• ${g.groupName}: $${formatAmount(g.amount)}`).join("\n")
-
-    const message = `¡Hola ${recipientName}! 👋
-
-${userName} te debe un total de $${formatAmount(debt.amount)} en Vaquitapp 🐄
-
-Desglose por grupos:
-${groupsList}
-
-¡Sería genial si pudiéramos ponernos al día! 💰
-
-Enviado desde Vaquitapp`
-
-    // Intentar usar la Web Share API nativa
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Recordatorio de deuda - Vaquitapp`,
-          text: message,
-        })
-        return
-      } catch (error) {
-        // Si el usuario cancela, no hacer nada más
-        if (error.name === "AbortError") return
-        console.log("Share failed:", error)
-      }
+      setConsolidatedDebts(consolidated)
     }
+  }, [groups, expenses, user])
 
-    // Fallback: copiar al portapapeles si no hay Web Share API
+  const handleShareConsolidation = async () => {
+    if (!user) return
+
     try {
-      await navigator.clipboard.writeText(message)
-      toast({
-        title: "¡Mensaje copiado! 📋",
-        description: "Puedes pegarlo en WhatsApp, Telegram o donde prefieras",
-      })
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "No se pudo compartir el recordatorio",
-        variant: "destructive",
-      })
+      const totalOwed = consolidatedDebts.reduce((sum, debt) => (debt.balance > 0 ? sum + debt.balance : sum), 0)
+      const totalDebt = consolidatedDebts.reduce(
+        (sum, debt) => (debt.balance < 0 ? sum + Math.abs(debt.balance) : sum),
+        0,
+      )
+
+      const shareText = `Mi resumen de gastos en Vaquitapp:
+${totalOwed > 0 ? `Me deben: $${totalOwed.toFixed(2)}` : ""}
+${totalDebt > 0 ? `Debo: $${totalDebt.toFixed(2)}` : ""}
+${totalOwed === 0 && totalDebt === 0 ? "Estoy al día con todos mis gastos" : ""}
+
+¡Únete a Vaquitapp para gestionar gastos compartidos!`
+
+      if (navigator.share) {
+        await navigator.share({
+          title: "Mi resumen de gastos - Vaquitapp",
+          text: shareText,
+        })
+      } else {
+        await navigator.clipboard.writeText(shareText)
+        toast.success("Resumen copiado al portapapeles")
+      }
+    } catch (error) {
+      console.error("Error sharing consolidation:", error)
+      toast.error("Error al compartir el resumen")
     }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-4">
-          <div className="animate-bounce">
-            <Image src="/cow-logo.svg" alt="Loading" width={48} height={48} className="opacity-60 mx-auto" />
-          </div>
-          <p className="text-muted-foreground">Calculando deudas...</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando consolidación...</p>
         </div>
       </div>
     )
   }
 
-  const totalDebt = consolidatedDebts.reduce((sum, debt) => sum + debt.amount, 0)
+  const totalOwed = consolidatedDebts.reduce((sum, debt) => (debt.balance > 0 ? sum + debt.balance : sum), 0)
+  const totalDebt = consolidatedDebts.reduce((sum, debt) => (debt.balance < 0 ? sum + Math.abs(debt.balance) : sum), 0)
+  const netBalance = totalOwed - totalDebt
 
   return (
-    <div className="space-y-4 sm:space-y-6 pb-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
-      <div className="flex items-center gap-3 sm:gap-4">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => onNavigate("dashboard")}
-          className="border-primary/20 hover:bg-primary/10 h-9 w-9 sm:h-10 sm:w-10"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2 truncate">
-            <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
-            <span className="truncate">Consolidación de Deudas</span>
-          </h1>
-          <p className="text-sm text-muted-foreground truncate">Resumen de todas tus deudas pendientes</p>
-        </div>
-      </div>
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onNavigate("dashboard")}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Volver
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Consolidación de Deudas</h1>
+                <p className="text-sm text-gray-600">Resumen de todos tus grupos</p>
+              </div>
+            </div>
 
-      {/* Resumen Total */}
-      <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-destructive/5">
-        <CardHeader className="pb-3 sm:pb-4">
-          <CardTitle className="text-lg sm:text-xl text-destructive flex items-center gap-2">
-            💸 Total de Deudas Pendientes
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center p-4 sm:p-6 rounded-xl bg-gradient-to-br from-destructive/10 to-destructive/5">
-            {totalDebt > 0 ? (
-              <div className="text-destructive">
-                <div className="text-3xl sm:text-4xl font-bold">${formatAmount(totalDebt)}</div>
-                <div className="text-xs sm:text-sm bg-destructive/20 px-3 py-1 rounded-full inline-block mt-2">
-                  Debes dinero en {groups.length} grupo{groups.length !== 1 ? "s" : ""}
-                </div>
-              </div>
-            ) : (
-              <div className="text-primary">
-                <div className="text-3xl sm:text-4xl font-bold">$0,00</div>
-                <div className="text-xs sm:text-sm bg-primary/20 px-3 py-1 rounded-full inline-block mt-2">
-                  ¡Estás al día en todos los grupos! ✨
-                </div>
-              </div>
-            )}
+            <Button variant="outline" size="sm" onClick={handleShareConsolidation}>
+              <Share2 className="h-4 w-4 mr-2" />
+              Compartir
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </header>
 
-      {/* Lista de Deudas Consolidadas */}
-      {consolidatedDebts.length > 0 ? (
-        <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-secondary/5">
-          <CardHeader className="pb-3 sm:pb-4">
-            <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
-              📊 Deudas por Persona
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 sm:space-y-4">
-            {consolidatedDebts.map((debt, index) => (
-              <div key={debt.to} className="space-y-3">
-                {/* Header de la deuda */}
-                <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-destructive/10 to-destructive/5 rounded-xl border border-destructive/20">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {usersData[debt.to]?.photoURL ? (
-                      <Image
-                        src={usersData[debt.to].photoURL || "/placeholder.svg"}
-                        alt="Avatar"
-                        width={40}
-                        height={40}
-                        className="h-9 w-9 sm:h-10 sm:w-10 rounded-full flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="h-9 w-9 sm:h-10 sm:w-10 bg-destructive/20 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Users className="h-4 w-4 sm:h-5 sm:w-5 text-destructive" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-destructive text-sm sm:text-base truncate">
-                        {getUserDisplayName(debt.to, usersData)}
-                      </div>
-                      <div className="text-xs sm:text-sm text-muted-foreground">
-                        {debt.groups.length} grupo{debt.groups.length !== 1 ? "s" : ""}
-                      </div>
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-green-100 rounded-full">
+                  <TrendingUp className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Te Deben</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    ${totalOwed.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-red-100 rounded-full">
+                  <TrendingDown className="h-6 w-6 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Debes</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    ${totalDebt.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-4">
+                <div className={`p-3 rounded-full ${netBalance >= 0 ? "bg-green-100" : "bg-red-100"}`}>
+                  <DollarSign className={`h-6 w-6 ${netBalance >= 0 ? "text-green-600" : "text-red-600"}`} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Balance Neto</p>
+                  <p className={`text-2xl font-bold ${netBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    $
+                    {Math.abs(netBalance).toLocaleString("es-ES", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                  <p className="text-xs text-gray-500">{netBalance >= 0 ? "A tu favor" : "En tu contra"}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Groups Breakdown */}
+        <div className="space-y-6">
+          <h3 className="text-xl font-semibold text-gray-900">Desglose por Grupo</h3>
+
+          {consolidatedDebts.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                  <Users className="h-8 w-8 text-gray-400" />
+                </div>
+                <h4 className="text-lg font-medium text-gray-900 mb-2">No hay grupos con gastos</h4>
+                <p className="text-gray-600">Únete a un grupo y agrega gastos para ver la consolidación</p>
+              </CardContent>
+            </Card>
+          ) : (
+            consolidatedDebts.map((debt) => (
+              <Card key={debt.groupId}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center space-x-2">
+                      <span>{debt.groupName}</span>
+                      <Badge variant="outline">{debt.currency}</Badge>
+                    </CardTitle>
+                    <div className="text-right">
+                      <p className={`text-lg font-bold ${debt.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {debt.currency}{" "}
+                        {Math.abs(debt.balance).toLocaleString("es-ES", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-500">{debt.balance >= 0 ? "Te deben" : "Debes"}</p>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0 ml-2">
-                    <div className="text-base sm:text-lg font-bold text-destructive">${formatAmount(debt.amount)}</div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {debt.creditors.length > 0 && (
+                    <div>
+                      <h5 className="font-medium text-gray-900 mb-2">Te deben:</h5>
+                      <div className="space-y-2">
+                        {debt.creditors.map((creditor) => (
+                          <div
+                            key={creditor.userId}
+                            className="flex items-center justify-between p-2 bg-green-50 rounded"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={usersData[creditor.userId]?.photoURL || "/placeholder.svg"} />
+                                <AvatarFallback>
+                                  {getUserDisplayName(creditor.userId, usersData).charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm font-medium">
+                                {getUserDisplayName(creditor.userId, usersData)}
+                              </span>
+                            </div>
+                            <span className="text-sm font-semibold text-green-600">
+                              {debt.currency}{" "}
+                              {creditor.amount.toLocaleString("es-ES", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {debt.debtors.length > 0 && (
+                    <div>
+                      <h5 className="font-medium text-gray-900 mb-2">Debes a:</h5>
+                      <div className="space-y-2">
+                        {debt.debtors.map((debtor) => (
+                          <div key={debtor.userId} className="flex items-center justify-between p-2 bg-red-50 rounded">
+                            <div className="flex items-center space-x-2">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={usersData[debtor.userId]?.photoURL || "/placeholder.svg"} />
+                                <AvatarFallback>
+                                  {getUserDisplayName(debtor.userId, usersData).charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm font-medium">
+                                {getUserDisplayName(debtor.userId, usersData)}
+                              </span>
+                            </div>
+                            <span className="text-sm font-semibold text-red-600">
+                              {debt.currency}{" "}
+                              {debtor.amount.toLocaleString("es-ES", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t">
                     <Button
-                      onClick={() => shareDebtReminder(debt)}
                       variant="outline"
                       size="sm"
-                      className="mt-1 border-destructive/30 hover:bg-destructive/10 text-destructive bg-transparent h-7 px-2 text-xs"
+                      onClick={() => onNavigate("group-details", debt.groupId)}
+                      className="w-full"
                     >
-                      <Share className="h-3 w-3 mr-1" />
-                      Enviar Recordatorio
+                      Ver Detalles del Grupo
                     </Button>
                   </div>
-                </div>
-
-                {/* Desglose por grupos */}
-                <div className="ml-4 sm:ml-6 space-y-2">
-                  {debt.groups.map((group) => (
-                    <div
-                      key={group.groupId}
-                      className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => onNavigate("group-details", group.groupId)}
-                    >
-                      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                        <div className="p-1.5 sm:p-2 bg-primary/20 rounded-full">
-                          <Users className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm sm:text-base text-primary truncate">
-                            {group.groupName}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Toca para ver detalles</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Badge className="bg-destructive/20 text-destructive text-xs sm:text-sm">
-                          ${formatAmount(group.amount)}
-                        </Badge>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Separador entre deudas */}
-                {index < consolidatedDebts.length - 1 && <div className="border-t border-muted/30 my-4"></div>}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-accent/5">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <div className="mb-6 p-6 bg-accent/10 rounded-full">
-              <CreditCard className="h-12 w-12 text-accent-foreground" />
-            </div>
-            <h3 className="text-xl font-bold text-accent-foreground mb-2">¡Excelente! 🎉</h3>
-            <p className="text-muted-foreground text-center mb-4">No tienes deudas pendientes en ningún grupo</p>
-            <Button onClick={() => onNavigate("dashboard")} className="bg-primary hover:bg-primary/90">
-              Volver al inicio
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Información adicional */}
-      <div className="text-center p-4 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl">
-        <p className="text-sm text-muted-foreground">
-          💡 <strong>Tip:</strong> Puedes enviar recordatorios amigables a tus amigos para que sepan cuánto les debes
-        </p>
-      </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      </main>
     </div>
   )
 }
