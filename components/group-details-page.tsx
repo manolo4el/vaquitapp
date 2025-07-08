@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -23,21 +22,14 @@ import {
   orderBy,
   serverTimestamp,
 } from "firebase/firestore"
-import {
-  calculateGroupBalances,
-  efficientTransfers,
-  getUserDisplayName,
-  formatCurrency,
-  parseInputNumber,
-} from "@/lib/calculations"
-import { ArrowLeft, Plus, Users, DollarSign, Share2, MessageCircle, TrendingUp, TrendingDown, Mail, Calendar, Receipt, ArrowRight, Eye } from 'lucide-react'
+import { calculateGroupBalances, getUserDisplayName, formatCurrency, parseInputNumber } from "@/lib/calculations"
+import { ArrowLeft, Plus, Users, DollarSign, Share2, MessageCircle, Mail, Receipt, ArrowRight, Eye } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { GroupChat } from "./group-chat"
 import { createInvitation } from "@/lib/invitations"
 import { createNotification } from "@/lib/notifications"
 import Image from "next/image"
 import { useAnalytics } from "@/hooks/use-analytics"
-import { createGroupInvitation } from "@/lib/invitations"
 
 interface GroupDetailsPageProps {
   groupId: string
@@ -81,7 +73,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   const [group, setGroup] = useState<Group | null>(null)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
-  const [usersData, setUsersData: React.Dispatch<React.SetStateAction<{}>>] = useState<{ [key: string]: any }>({})
+  const [usersData, setUsersData] = useState<{ [key: string]: any }>({})
   const [loading, setLoading] = useState(true)
   const [newExpenseDesc, setNewExpenseDesc] = useState("")
   const [newExpenseAmount, setNewExpenseAmount] = useState("")
@@ -95,6 +87,10 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   const [showIncludeInExpensesDialog, setShowIncludeInExpensesDialog] = useState(false)
   const [pendingNewMembers, setPendingNewMembers] = useState<string[]>([])
   const { trackGroupAction, trackUserAction } = useAnalytics()
+
+  const [calculatedBalances, setCalculatedBalances] = useState<any>({})
+  const [calculatedSettlements, setCalculatedSettlements] = useState<Settlement[]>([])
+  const [totalExpenses, setTotalExpenses] = useState<number>(0)
 
   // Cargar datos del grupo
   useEffect(() => {
@@ -137,7 +133,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
           description: "No se pudo cargar el grupo",
           variant: "destructive",
         })
-      }
+      },
     )
 
     // Cargar gastos
@@ -169,6 +165,32 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
     }
   }, [groupId, user, onNavigate])
 
+  useEffect(() => {
+    if (group && expenses.length >= 0 && transfers.length >= 0) {
+      const {
+        balances: calculatedBalances,
+        settlements: calculatedSettlements,
+        totalExpenses,
+      } = calculateGroupBalances(group.members, expenses, transfers)
+      setCalculatedBalances(calculatedBalances)
+      setCalculatedSettlements(calculatedSettlements)
+      setTotalExpenses(totalExpenses)
+
+      const userBalance = calculatedBalances[user?.uid || ""] || 0
+      setBalances(calculatedBalances)
+      setSettlements(calculatedSettlements)
+
+      // Filtrar liquidaciones donde el usuario actual debe dinero
+      const userDebts = calculatedSettlements.filter((settlement) => settlement.from === user?.uid)
+      setUserSettlements(userDebts)
+    }
+  }, [group, expenses, transfers, user])
+
+  useEffect(() => {
+    // Scroll to top when component mounts
+    window.scrollTo(0, 0)
+  }, [])
+
   const addExpense = async () => {
     if (!newExpenseDesc.trim() || !newExpenseAmount || !user || !group) return
 
@@ -192,7 +214,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
       })
 
       // Crear notificaciones para otros miembros
-      const otherMembers = group.members.filter(memberId => memberId !== user.uid)
+      const otherMembers = group.members.filter((memberId) => memberId !== user.uid)
       for (const memberId of otherMembers) {
         await createNotification({
           userId: memberId,
@@ -293,36 +315,6 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
       })
     }
   }
-
-  if (loading || !group) {
-    return (
-      <div className="space-y-6">
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Cargando grupo...</p>
-        </div>
-      </div>
-    )
-  }
-
-  const { balances: calculatedBalances, settlements: calculatedSettlements, totalExpenses } = calculateGroupBalances(group.members, expenses, transfers);
-  const userBalance = calculatedBalances[user?.uid || ""] || 0;
-
-  useEffect(() => {
-    if (group && expenses.length >= 0) {
-      setBalances(calculatedBalances)
-      setSettlements(calculatedSettlements)
-
-      // Filtrar liquidaciones donde el usuario actual debe dinero
-      const userDebts = calculatedSettlements.filter((settlement) => settlement.from === user?.uid)
-      setUserSettlements(userDebts)
-    }
-  }, [group, expenses, transfers, user, calculatedBalances, calculatedSettlements])
-
-  useEffect(() => {
-    // Scroll to top when component mounts
-    window.scrollTo(0, 0)
-  }, [])
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -438,16 +430,24 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
     }
   }
 
+  if (loading || !group) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando grupo...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const userBalance = calculatedBalances[user?.uid || ""] || 0
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onNavigate("dashboard")}
-          className="hover:bg-primary/10"
-        >
+        <Button variant="ghost" size="icon" onClick={() => onNavigate("dashboard")} className="hover:bg-primary/10">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
@@ -461,7 +461,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
           variant="outline"
           size="icon"
           onClick={shareGroup}
-          className="border-primary/20 hover:bg-primary/10"
+          className="border-primary/20 hover:bg-primary/10 bg-transparent"
         >
           <Share2 className="h-4 w-4" />
         </Button>
@@ -476,23 +476,17 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
               {userBalance > 0 ? (
                 <div className="text-accent-foreground">
                   <div className="text-3xl font-bold text-accent">+{formatCurrency(userBalance)}</div>
-                  <div className="text-sm bg-accent/20 px-3 py-1 rounded-full inline-block">
-                    ¡Te deben dinero! 🎉
-                  </div>
+                  <div className="text-sm bg-accent/20 px-3 py-1 rounded-full inline-block">¡Te deben dinero! 🎉</div>
                 </div>
               ) : userBalance < 0 ? (
                 <div className="text-destructive">
                   <div className="text-3xl font-bold">{formatCurrency(userBalance)}</div>
-                  <div className="text-sm bg-destructive/20 px-3 py-1 rounded-full inline-block">
-                    Debes dinero 💸
-                  </div>
+                  <div className="text-sm bg-destructive/20 px-3 py-1 rounded-full inline-block">Debes dinero 💸</div>
                 </div>
               ) : (
                 <div className="text-primary">
                   <div className="text-3xl font-bold">{formatCurrency(0)}</div>
-                  <div className="text-sm bg-primary/20 px-3 py-1 rounded-full inline-block">
-                    ¡Estás al día! ✨
-                  </div>
+                  <div className="text-sm bg-primary/20 px-3 py-1 rounded-full inline-block">¡Estás al día! ✨</div>
                 </div>
               )}
             </div>
@@ -626,9 +620,9 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
             <CardContent>
               <div className="space-y-3">
                 {group.members.map((memberId) => {
-                  const balance = balances[memberId] || 0
+                  const balance = calculatedBalances[memberId] || 0
                   const memberData = usersData[memberId]
-                  
+
                   return (
                     <div key={memberId} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
                       <div className="flex-shrink-0">
@@ -651,8 +645,11 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
                         <div className="text-sm text-muted-foreground">{memberData?.email}</div>
                       </div>
                       <div className="text-right">
-                        <div className={`font-bold ${balance > 0 ? "text-accent" : balance < 0 ? "text-destructive" : "text-primary"}`}>
-                          {balance > 0 ? "+" : ""}{formatCurrency(balance)}
+                        <div
+                          className={`font-bold ${balance > 0 ? "text-accent" : balance < 0 ? "text-destructive" : "text-primary"}`}
+                        >
+                          {balance > 0 ? "+" : ""}
+                          {formatCurrency(balance)}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {balance > 0 ? "Le deben" : balance < 0 ? "Debe" : "Al día"}
@@ -739,7 +736,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
                 {group.members.map((memberId) => {
                   const memberData = usersData[memberId]
                   const isCreator = memberId === group.createdBy
-                  
+
                   return (
                     <div key={memberId} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
                       <div className="flex-shrink-0">
@@ -795,8 +792,8 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
                   disabled={isAddingMember}
                   className="border-primary/20 focus:border-primary"
                 />
-                <Button 
-                  onClick={addMember} 
+                <Button
+                  onClick={addMember}
                   disabled={isAddingMember || !newMemberEmail.trim()}
                   className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
                 >
@@ -807,8 +804,8 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
               {addMemberMessage && (
                 <div
                   className={`text-sm p-2 rounded ${
-                    addMemberMessage.includes("exitosamente") 
-                      ? "text-accent-foreground bg-accent/20" 
+                    addMemberMessage.includes("exitosamente")
+                      ? "text-accent-foreground bg-accent/20"
                       : "text-destructive bg-destructive/20"
                   }`}
                 >
