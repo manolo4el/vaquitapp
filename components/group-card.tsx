@@ -1,100 +1,108 @@
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { collection, onSnapshot, doc, getDoc } from "firebase/firestore"
+import { calculateBalances } from "@/lib/calculations"
 import { Users, TrendingUp, TrendingDown } from "lucide-react"
-import { formatCurrency, getUserDisplayName } from "@/lib/calculations"
-import Image from "next/image"
+import { GroupDetails } from "./group-details"
 
 interface Group {
   id: string
   name: string
   members: string[]
-  createdAt: any
   createdBy: string
+  createdAt: Date
 }
 
 interface GroupCardProps {
   group: Group
-  userBalance: number
-  totalExpenses: number
-  usersData: { [key: string]: any }
-  onClick: () => void
 }
 
-export function GroupCard({ group, userBalance, totalExpenses, usersData, onClick }: GroupCardProps) {
+export function GroupCard({ group }: GroupCardProps) {
+  const { user } = useAuth()
+  const [expenses, setExpenses] = useState<any[]>([])
+  const [usersData, setUsersData] = useState<any>({})
+  const [showDetails, setShowDetails] = useState(false)
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "groups", group.id, "expenses"), (snapshot) => {
+      setExpenses(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
+    })
+
+    // Cargar datos de usuarios
+    if (group.members && group.members.length > 0) {
+      Promise.all(group.members.map((uid) => getDoc(doc(db, "users", uid)))).then((snaps) => {
+        const data: any = {}
+        snaps.forEach((snap) => {
+          if (snap.exists()) data[snap.id] = snap.data()
+        })
+        setUsersData(data)
+      })
+    }
+
+    return unsubscribe
+  }, [group.id, group.members])
+
+  const balances = calculateBalances(group.members, expenses)
+  const userBalance = balances[user?.uid || ""] || 0
+  const youOwe = userBalance < 0 ? -userBalance : 0
+  const theyOweYou = userBalance > 0 ? userBalance : 0
+
+  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+
   return (
-    <Card
-      className="cursor-pointer hover:shadow-lg transition-all duration-200 border-0 bg-gradient-to-br from-card to-muted/20 hover:from-card hover:to-primary/5"
-      onClick={onClick}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex-1">
-            <h3 className="font-semibold text-primary truncate">{group.name}</h3>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-              <Users className="h-3 w-3" />
-              <span>{group.members.length} miembros</span>
-            </div>
+    <>
+      <Card className="cursor-pointer hover:shadow-2xl transition-all duration-300 transform hover:scale-105 border-0 bg-gradient-to-br from-card to-secondary/5 overflow-hidden group">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        <CardHeader className="relative z-10">
+          <div className="flex justify-between items-start">
+            <CardTitle className="text-xl text-primary group-hover:text-primary/80 transition-colors">
+              {group.name}
+            </CardTitle>
+            <Badge variant="secondary" className="bg-secondary/20 text-secondary-foreground border-secondary/30">
+              <Users className="h-3 w-3 mr-1" />
+              {group.members.length}
+            </Badge>
           </div>
-          <div className="text-right">
-            <div className="flex items-center gap-1">
-              {userBalance > 0 ? (
-                <TrendingUp className="h-3 w-3 text-green-600" />
-              ) : userBalance < 0 ? (
-                <TrendingDown className="h-3 w-3 text-red-600" />
-              ) : null}
-              <span
-                className={`text-sm font-bold ${
-                  userBalance > 0 ? "text-green-600" : userBalance < 0 ? "text-red-600" : "text-primary"
-                }`}
-              >
-                {userBalance > 0 ? "+" : ""}
-                {formatCurrency(userBalance)}
-              </span>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {userBalance > 0 ? "Te deben" : userBalance < 0 ? "Debes" : "Al día"}
-            </div>
+        </CardHeader>
+        <CardContent className="space-y-6 relative z-10" onClick={() => setShowDetails(true)}>
+          <div className="text-center p-3 bg-gradient-to-r from-muted/50 to-secondary/20 rounded-xl">
+            <div className="text-sm text-muted-foreground mb-1">Total del rebaño</div>
+            <div className="text-2xl font-bold text-primary">${totalExpenses.toFixed(2)}</div>
           </div>
-        </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex -space-x-2">
-            {group.members.slice(0, 3).map((memberId) => {
-              const userData = usersData[memberId]
-              return (
-                <div key={memberId} className="relative">
-                  {userData?.photoURL ? (
-                    <Image
-                      src={userData.photoURL || "/placeholder.svg"}
-                      alt={getUserDisplayName(memberId, usersData)}
-                      width={24}
-                      height={24}
-                      className="rounded-full border-2 border-background"
-                    />
-                  ) : (
-                    <div className="h-6 w-6 bg-primary/20 rounded-full border-2 border-background flex items-center justify-center">
-                      <span className="text-xs font-medium text-primary">
-                        {getUserDisplayName(memberId, usersData).charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-            {group.members.length > 3 && (
-              <div className="h-6 w-6 bg-muted rounded-full border-2 border-background flex items-center justify-center">
-                <span className="text-xs font-medium text-muted-foreground">+{group.members.length - 3}</span>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center p-4 bg-gradient-to-br from-accent/10 to-accent/5 rounded-xl border border-accent/20">
+              <div className="flex items-center justify-center text-accent-foreground mb-2">
+                <TrendingUp className="h-4 w-4 mr-1" />
+                <span className="text-sm font-medium">Te deben</span>
               </div>
-            )}
-          </div>
+              <div className="text-xl font-bold text-accent-foreground">${theyOweYou.toFixed(2)}</div>
+            </div>
 
-          <Badge variant="secondary" className="bg-secondary/20 text-secondary-foreground text-xs">
-            {formatCurrency(totalExpenses)}
-          </Badge>
-        </div>
-      </CardContent>
-    </Card>
+            <div className="text-center p-4 bg-gradient-to-br from-destructive/10 to-destructive/5 rounded-xl border border-destructive/20">
+              <div className="flex items-center justify-center text-destructive mb-2">
+                <TrendingDown className="h-4 w-4 mr-1" />
+                <span className="text-sm font-medium">Debes</span>
+              </div>
+              <div className="text-xl font-bold text-destructive">${youOwe.toFixed(2)}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <GroupDetails
+        group={group}
+        isOpen={showDetails}
+        onClose={() => setShowDetails(false)}
+        expenses={expenses}
+        usersData={usersData}
+        balances={balances}
+      />
+    </>
   )
 }
