@@ -4,291 +4,187 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, where, onSnapshot, doc, getDoc, addDoc } from "firebase/firestore"
-import { calculateBalancesWithTransfers, getUserDisplayName, formatAmount } from "@/lib/calculations"
-import { ArrowLeft, TrendingUp, TrendingDown, Copy, CreditCard, CheckCircle, Users, Share } from "lucide-react"
+import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore"
+import {
+  calculateBalancesWithTransfers,
+  efficientTransfers,
+  getUserDisplayName,
+  formatAmount,
+} from "@/lib/calculations"
+import { ArrowLeft, Users, ArrowRight, Share, CreditCard } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import Image from "next/image"
 
 interface DebtConsolidationPageProps {
   onNavigate: (page: string, groupId?: string) => void
 }
 
-interface GroupDebt {
-  groupId: string
-  groupName: string
-  amount: number
-  otherUserId: string
-  otherUserName: string
-  otherUserPaymentInfo?: string
+interface GroupData {
+  id: string
+  name: string
+  members: string[]
+  expenses: any[]
+  transfers: any[]
 }
 
 interface ConsolidatedDebt {
-  otherUserId: string
-  otherUserName: string
-  otherUserPaymentInfo?: string
-  totalAmount: number
-  groups: Array<{
-    groupId: string
-    groupName: string
-    amount: number
-  }>
+  to: string
+  amount: number
+  groups: { groupId: string; groupName: string; amount: number }[]
 }
 
 export function DebtConsolidationPage({ onNavigate }: DebtConsolidationPageProps) {
   const { user } = useAuth()
-  const [groups, setGroups] = useState<any[]>([])
+  const [groups, setGroups] = useState<GroupData[]>([])
   const [usersData, setUsersData] = useState<any>({})
-  const [debtsToMe, setDebtsToMe] = useState<GroupDebt[]>([])
-  const [myDebts, setMyDebts] = useState<GroupDebt[]>([])
-  const [consolidatedDebtsToMe, setConsolidatedDebtsToMe] = useState<ConsolidatedDebt[]>([])
-  const [consolidatedMyDebts, setConsolidatedMyDebts] = useState<ConsolidatedDebt[]>([])
-  const [userProfile, setUserProfile] = useState<any>(null)
+  const [consolidatedDebts, setConsolidatedDebts] = useState<ConsolidatedDebt[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!user) return
 
-    const q = query(collection(db, "groups"), where("members", "array-contains", user.uid))
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const groupsData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-      setGroups(groupsData)
-
-      // Cargar datos de todos los usuarios únicos
-      const allUserIds = new Set<string>()
-      groupsData.forEach((group) => {
-        group.members.forEach((uid: string) => allUserIds.add(uid))
-      })
-
-      const usersPromises = Array.from(allUserIds).map((uid) => getDoc(doc(db, "users", uid)))
-      const usersSnaps = await Promise.all(usersPromises)
-      const usersDataMap: any = {}
-      usersSnaps.forEach((snap) => {
-        if (snap.exists()) {
-          usersDataMap[snap.id] = snap.data()
-        }
-      })
-      setUsersData(usersDataMap)
-    })
-
-    return unsubscribe
-  }, [user])
-
-  useEffect(() => {
-    if (user) {
-      const userDocRef = doc(db, "users", user.uid)
-      getDoc(userDocRef)
-        .then((docSnap) => {
-          if (docSnap.exists()) {
-            setUserProfile(docSnap.data())
-          } else {
-            console.log("No such document!")
-          }
-        })
-        .catch((error) => {
-          console.log("Error getting document:", error)
-        })
-    }
-  }, [user])
-
-  useEffect(() => {
-    if (!user || groups.length === 0) return
-
     const unsubscribes: (() => void)[] = []
-    const allDebtsToMe: GroupDebt[] = []
-    const allMyDebts: GroupDebt[] = []
 
-    const processGroup = (group: any, expenses: any[], transfers: any[]) => {
-      const balances = calculateBalancesWithTransfers(group.members, expenses, transfers)
+    const loadUserGroups = async () => {
+      try {
+        // Obtener grupos donde el usuario es miembro
+        const groupsQuery = query(collection(db, "groups"), where("members", "array-contains", user.uid))
 
-      // Procesar cada miembro del grupo
-      group.members.forEach((memberId: string) => {
-        if (memberId === user.uid) return // Saltar el usuario actual
+        const groupsUnsub = onSnapshot(groupsQuery, async (snapshot) => {
+          const groupsData: GroupData[] = []
+          const allUserIds = new Set<string>()
 
-        const memberBalance = balances[memberId] || 0
-        const userBalance = balances[user.uid] || 0
+          for (const groupDoc of snapshot.docs) {
+            const groupData = { id: groupDoc.id, ...groupDoc.data() }
 
-        // Si el miembro me debe dinero (mi balance es positivo y el suyo negativo)
-        if (userBalance > 0 && memberBalance < 0) {
-          // Calcular cuánto me debe específicamente este miembro
-          const debtAmount = Math.min(userBalance, -memberBalance)
-          if (debtAmount > 0.01) {
-            allDebtsToMe.push({
-              groupId: group.id,
-              groupName: group.name,
-              amount: debtAmount,
-              otherUserId: memberId,
-              otherUserName: getUserDisplayName(memberId, usersData),
-              otherUserPaymentInfo: usersData[memberId]?.paymentInfo,
+            // Agregar todos los miembros del grupo para cargar sus datos
+            groupData.members.forEach((memberId: string) => allUserIds.add(memberId))
+
+            // Cargar gastos del grupo
+            const expensesUnsub = onSnapshot(collection(db, "groups", groupDoc.id, "expenses"), (expensesSnapshot) => {
+              const expenses = expensesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+
+              // Cargar transferencias del grupo
+              const transfersUnsub = onSnapshot(
+                collection(db, "groups", groupDoc.id, "transfers"),
+                (transfersSnapshot) => {
+                  const transfers = transfersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+
+                  // Actualizar el grupo con gastos y transferencias
+                  const updatedGroup = { ...groupData, expenses, transfers }
+
+                  setGroups((prevGroups) => {
+                    const existingIndex = prevGroups.findIndex((g) => g.id === groupDoc.id)
+                    if (existingIndex >= 0) {
+                      const newGroups = [...prevGroups]
+                      newGroups[existingIndex] = updatedGroup
+                      return newGroups
+                    } else {
+                      return [...prevGroups, updatedGroup]
+                    }
+                  })
+                },
+              )
+
+              unsubscribes.push(transfersUnsub)
             })
+
+            unsubscribes.push(expensesUnsub)
           }
-        }
 
-        // Si yo le debo dinero al miembro (mi balance es negativo y el suyo positivo)
-        if (userBalance < 0 && memberBalance > 0) {
-          // Calcular cuánto le debo específicamente a este miembro
-          const debtAmount = Math.min(-userBalance, memberBalance)
-          if (debtAmount > 0.01) {
-            allMyDebts.push({
-              groupId: group.id,
-              groupName: group.name,
-              amount: debtAmount,
-              otherUserId: memberId,
-              otherUserName: getUserDisplayName(memberId, usersData),
-              otherUserPaymentInfo: usersData[memberId]?.paymentInfo,
-            })
-          }
-        }
-      })
-    }
-
-    let processedGroups = 0
-    const totalGroups = groups.length
-
-    groups.forEach((group) => {
-      const expensesUnsub = onSnapshot(collection(db, "groups", group.id, "expenses"), (expensesSnapshot) => {
-        const expenses = expensesSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-
-        const transfersUnsub = onSnapshot(collection(db, "groups", group.id, "transfers"), (transfersSnapshot) => {
-          const transfers = transfersSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-
-          processGroup(group, expenses, transfers)
-          processedGroups++
-
-          // Cuando todos los grupos han sido procesados, consolidar las deudas
-          if (processedGroups === totalGroups) {
-            // Consolidar deudas hacia mí
-            const consolidatedToMe = consolidateDebts(allDebtsToMe)
-            setConsolidatedDebtsToMe(consolidatedToMe)
-            setDebtsToMe(allDebtsToMe)
-
-            // Consolidar mis deudas
-            const consolidatedMy = consolidateDebts(allMyDebts)
-            setConsolidatedMyDebts(consolidatedMy)
-            setMyDebts(allMyDebts)
-
-            // Reset counter for next update
-            processedGroups = 0
-            allDebtsToMe.length = 0
-            allMyDebts.length = 0
-          }
+          // Cargar datos de todos los usuarios
+          const usersPromises = Array.from(allUserIds).map((uid) => getDoc(doc(db, "users", uid)))
+          const usersSnaps = await Promise.all(usersPromises)
+          const usersDataMap: any = {}
+          usersSnaps.forEach((snap) => {
+            if (snap.exists()) {
+              usersDataMap[snap.id] = snap.data()
+            }
+          })
+          setUsersData(usersDataMap)
+          setLoading(false)
         })
 
-        unsubscribes.push(transfersUnsub)
-      })
+        unsubscribes.push(groupsUnsub)
+      } catch (error) {
+        console.error("Error loading groups:", error)
+        setLoading(false)
+      }
+    }
 
-      unsubscribes.push(expensesUnsub)
-    })
+    loadUserGroups()
 
     return () => {
       unsubscribes.forEach((unsub) => unsub())
     }
-  }, [user, groups, usersData])
+  }, [user])
 
-  const consolidateDebts = (debts: GroupDebt[]): ConsolidatedDebt[] => {
-    const consolidated: { [userId: string]: ConsolidatedDebt } = {}
+  useEffect(() => {
+    if (groups.length === 0 || !user) return
 
-    debts.forEach((debt) => {
-      if (!consolidated[debt.otherUserId]) {
-        consolidated[debt.otherUserId] = {
-          otherUserId: debt.otherUserId,
-          otherUserName: debt.otherUserName,
-          otherUserPaymentInfo: debt.otherUserPaymentInfo,
-          totalAmount: 0,
-          groups: [],
+    // Calcular deudas consolidadas
+    const debtsMap = new Map<string, ConsolidatedDebt>()
+
+    groups.forEach((group) => {
+      const balances = calculateBalancesWithTransfers(group.members, group.expenses, group.transfers)
+      const settlements = efficientTransfers(balances)
+
+      // Filtrar solo las deudas del usuario actual
+      const userDebts = settlements.filter((settlement) => settlement.from === user.uid)
+
+      userDebts.forEach((debt) => {
+        const existingDebt = debtsMap.get(debt.to)
+        if (existingDebt) {
+          existingDebt.amount += debt.amount
+          existingDebt.groups.push({
+            groupId: group.id,
+            groupName: group.name,
+            amount: debt.amount,
+          })
+        } else {
+          debtsMap.set(debt.to, {
+            to: debt.to,
+            amount: debt.amount,
+            groups: [
+              {
+                groupId: group.id,
+                groupName: group.name,
+                amount: debt.amount,
+              },
+            ],
+          })
         }
-      }
-
-      consolidated[debt.otherUserId].totalAmount += debt.amount
-      consolidated[debt.otherUserId].groups.push({
-        groupId: debt.groupId,
-        groupName: debt.groupName,
-        amount: debt.amount,
       })
     })
 
-    return Object.values(consolidated).filter((debt) => debt.totalAmount > 0.01)
-  }
+    const consolidatedArray = Array.from(debtsMap.values()).sort((a, b) => b.amount - a.amount)
+    setConsolidatedDebts(consolidatedArray)
+  }, [groups, user])
 
-  const confirmConsolidatedTransfer = async (consolidatedDebt: ConsolidatedDebt) => {
-    if (!user) return
+  const shareDebtReminder = async (debt: ConsolidatedDebt) => {
+    const userName = usersData[user?.uid || ""]?.displayName || usersData[user?.uid || ""]?.email || "Alguien"
+    const recipientName = getUserDisplayName(debt.to, usersData)
 
-    try {
-      // Crear transferencias en cada grupo afectado
-      const transferPromises = consolidatedDebt.groups.map((group) =>
-        addDoc(collection(db, "groups", group.groupId, "transfers"), {
-          from: user.uid,
-          to: consolidatedDebt.otherUserId,
-          amount: group.amount,
-          confirmedAt: new Date(),
-          confirmedBy: user.uid,
-        }),
-      )
-
-      await Promise.all(transferPromises)
-
-      toast({
-        title: "¡Transferencia consolidada confirmada! 💸",
-        description: `Se registró el pago de $${formatAmount(consolidatedDebt.totalAmount)} a ${consolidatedDebt.otherUserName} en ${consolidatedDebt.groups.length} grupo${consolidatedDebt.groups.length > 1 ? "s" : ""}`,
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo confirmar la transferencia consolidada",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      toast({
-        title: "¡Copiado!",
-        description: "Información copiada al portapapeles",
-      })
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "No se pudo copiar al portapapeles",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const shareDebt = async (debt: ConsolidatedDebt) => {
-    if (!user || !userProfile) return
-
-    const paymentInfo = userProfile.paymentInfo ? `\n\nPodés transferirme a: ${userProfile.paymentInfo}` : ""
     const groupsList = debt.groups.map((g) => `• ${g.groupName}: $${formatAmount(g.amount)}`).join("\n")
 
-    const message = `¡Hola ${debt.otherUserName}! 👋
+    const message = `¡Hola ${recipientName}! 👋
 
-Te escribo desde Vaquitapp para recordarte que tenés una deuda pendiente conmigo:
+${userName} te debe un total de $${formatAmount(debt.amount)} en Vaquitapp 🐄
 
-💰 Total: $${formatAmount(debt.totalAmount)}
+Desglose por grupos:
+${groupsList}
 
-📋 Desglose:
-${groupsList}${paymentInfo}
+¡Sería genial si pudiéramos ponernos al día! 💰
 
-¡Gracias! 😊`
+Enviado desde Vaquitapp`
 
-    // Intentar usar Web Share API nativa
+    // Intentar usar la Web Share API nativa
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "Recordatorio de deuda - Vaquitapp",
+          title: `Recordatorio de deuda - Vaquitapp`,
           text: message,
         })
         return
@@ -304,7 +200,7 @@ ${groupsList}${paymentInfo}
       await navigator.clipboard.writeText(message)
       toast({
         title: "¡Mensaje copiado! 📋",
-        description: "El recordatorio se copió al portapapeles",
+        description: "Puedes pegarlo en WhatsApp, Telegram o donde prefieras",
       })
     } catch (err) {
       toast({
@@ -315,231 +211,176 @@ ${groupsList}${paymentInfo}
     }
   }
 
-  const totalDebtsToMe = consolidatedDebtsToMe.reduce((sum, debt) => sum + debt.totalAmount, 0)
-  const totalMyDebts = consolidatedMyDebts.reduce((sum, debt) => sum + debt.totalAmount, 0)
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <div className="animate-bounce">
+            <Image src="/cow-logo.svg" alt="Loading" width={48} height={48} className="opacity-60 mx-auto" />
+          </div>
+          <p className="text-muted-foreground">Calculando deudas...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const totalDebt = consolidatedDebts.reduce((sum, debt) => sum + debt.amount, 0)
 
   return (
-    <div className="space-y-6 pb-6">
+    <div className="space-y-4 sm:space-y-6 pb-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
         <Button
           variant="outline"
           size="icon"
           onClick={() => onNavigate("dashboard")}
-          className="border-primary/20 hover:bg-primary/10"
+          className="border-primary/20 hover:bg-primary/10 h-9 w-9 sm:h-10 sm:w-10"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-primary">Consolidado de Deudas 💰</h1>
-          <p className="text-muted-foreground">Resumen de todas tus deudas y créditos</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2 truncate">
+            <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
+            <span className="truncate">Consolidación de Deudas</span>
+          </h1>
+          <p className="text-sm text-muted-foreground truncate">Resumen de todas tus deudas pendientes</p>
         </div>
       </div>
 
-      {/* Resumen total */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-accent/5">
-          <CardContent className="p-6 text-center">
-            <TrendingUp className="h-8 w-8 text-accent-foreground mx-auto mb-3" />
-            <div className="text-sm text-accent-foreground mb-1">Te deben en total</div>
-            <div className="text-2xl font-bold text-accent-foreground">${formatAmount(totalDebtsToMe)}</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {consolidatedDebtsToMe.length} persona{consolidatedDebtsToMe.length !== 1 ? "s" : ""}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Resumen Total */}
+      <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-destructive/5">
+        <CardHeader className="pb-3 sm:pb-4">
+          <CardTitle className="text-lg sm:text-xl text-destructive flex items-center gap-2">
+            💸 Total de Deudas Pendientes
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center p-4 sm:p-6 rounded-xl bg-gradient-to-br from-destructive/10 to-destructive/5">
+            {totalDebt > 0 ? (
+              <div className="text-destructive">
+                <div className="text-3xl sm:text-4xl font-bold">${formatAmount(totalDebt)}</div>
+                <div className="text-xs sm:text-sm bg-destructive/20 px-3 py-1 rounded-full inline-block mt-2">
+                  Debes dinero en {groups.length} grupo{groups.length !== 1 ? "s" : ""}
+                </div>
+              </div>
+            ) : (
+              <div className="text-primary">
+                <div className="text-3xl sm:text-4xl font-bold">$0,00</div>
+                <div className="text-xs sm:text-sm bg-primary/20 px-3 py-1 rounded-full inline-block mt-2">
+                  ¡Estás al día en todos los grupos! ✨
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-destructive/5">
-          <CardContent className="p-6 text-center">
-            <TrendingDown className="h-8 w-8 text-destructive mx-auto mb-3" />
-            <div className="text-sm text-destructive mb-1">Debés en total</div>
-            <div className="text-2xl font-bold text-destructive">${formatAmount(totalMyDebts)}</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {consolidatedMyDebts.length} persona{consolidatedMyDebts.length !== 1 ? "s" : ""}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabs para separar deudas */}
-      <Tabs defaultValue="my-debts" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="my-debts" className="flex items-center gap-2">
-            <TrendingDown className="h-4 w-4" />
-            Mis Deudas ({consolidatedMyDebts.length})
-          </TabsTrigger>
-          <TabsTrigger value="debts-to-me" className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            Me Deben ({consolidatedDebtsToMe.length})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Mis Deudas */}
-        <TabsContent value="my-debts" className="space-y-4">
-          {consolidatedMyDebts.length === 0 ? (
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-primary/5">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="text-4xl mb-4">🎉</div>
-                <h3 className="text-xl font-bold text-primary mb-2">¡No tenés deudas!</h3>
-                <p className="text-muted-foreground text-center">Estás al día con todos tus amigos</p>
-              </CardContent>
-            </Card>
-          ) : (
-            consolidatedMyDebts.map((debt) => (
-              <Card key={debt.otherUserId} className="border-0 shadow-xl bg-gradient-to-br from-card to-destructive/5">
-                <CardHeader>
-                  <CardTitle className="text-lg text-destructive flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="h-5 w-5" />
-                      Le debés a {debt.otherUserName}
-                    </div>
-                    <div className="text-2xl font-bold">${formatAmount(debt.totalAmount)}</div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Desglose por grupo */}
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground">Desglose por grupo:</div>
-                    {debt.groups.map((group) => (
-                      <div key={group.groupId} className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                        <span className="text-sm">{group.groupName}</span>
-                        <Badge variant="outline" className="text-destructive border-destructive/30">
-                          ${formatAmount(group.amount)}
-                        </Badge>
+      {/* Lista de Deudas Consolidadas */}
+      {consolidatedDebts.length > 0 ? (
+        <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-secondary/5">
+          <CardHeader className="pb-3 sm:pb-4">
+            <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
+              📊 Deudas por Persona
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 sm:space-y-4">
+            {consolidatedDebts.map((debt, index) => (
+              <div key={debt.to} className="space-y-3">
+                {/* Header de la deuda */}
+                <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-destructive/10 to-destructive/5 rounded-xl border border-destructive/20">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {usersData[debt.to]?.photoURL ? (
+                      <Image
+                        src={usersData[debt.to].photoURL || "/placeholder.svg"}
+                        alt="Avatar"
+                        width={40}
+                        height={40}
+                        className="h-9 w-9 sm:h-10 sm:w-10 rounded-full flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="h-9 w-9 sm:h-10 sm:w-10 bg-destructive/20 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Users className="h-4 w-4 sm:h-5 sm:w-5 text-destructive" />
                       </div>
-                    ))}
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-destructive text-sm sm:text-base truncate">
+                        {getUserDisplayName(debt.to, usersData)}
+                      </div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">
+                        {debt.groups.length} grupo{debt.groups.length !== 1 ? "s" : ""}
+                      </div>
+                    </div>
                   </div>
+                  <div className="text-right flex-shrink-0 ml-2">
+                    <div className="text-base sm:text-lg font-bold text-destructive">${formatAmount(debt.amount)}</div>
+                    <Button
+                      onClick={() => shareDebtReminder(debt)}
+                      variant="outline"
+                      size="sm"
+                      className="mt-1 border-destructive/30 hover:bg-destructive/10 text-destructive bg-transparent h-7 px-2 text-xs"
+                    >
+                      <Share className="h-3 w-3 mr-1" />
+                      Enviar Recordatorio
+                    </Button>
+                  </div>
+                </div>
 
-                  {/* Información de pago */}
-                  {debt.otherUserPaymentInfo ? (
-                    <div className="p-4 bg-gradient-to-r from-accent/10 to-secondary/10 rounded-xl border border-accent/20">
-                      <div className="space-y-2">
-                        <div className="font-medium text-accent-foreground text-sm">Información de pago:</div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-sm font-mono bg-white/50 px-2 py-1 rounded flex-1 break-all">
-                            {debt.otherUserPaymentInfo}
+                {/* Desglose por grupos */}
+                <div className="ml-4 sm:ml-6 space-y-2">
+                  {debt.groups.map((group) => (
+                    <div
+                      key={group.groupId}
+                      className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => onNavigate("group-details", group.groupId)}
+                    >
+                      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                        <div className="p-1.5 sm:p-2 bg-primary/20 rounded-full">
+                          <Users className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm sm:text-base text-primary truncate">
+                            {group.groupName}
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => copyToClipboard(debt.otherUserPaymentInfo!)}
-                            className="bg-transparent"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
+                          <div className="text-xs text-muted-foreground">Toca para ver detalles</div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 bg-destructive/10 rounded-xl text-center">
-                      <div className="text-destructive font-medium text-sm">⚠️ Sin información de pago</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {debt.otherUserName} debe completar su perfil
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Botón de confirmación */}
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary">
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Confirmar Transferencia Consolidada
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-md">
-                      <DialogHeader>
-                        <DialogTitle className="text-destructive flex items-center gap-2">
-                          💸 Confirmar transferencia a {debt.otherUserName}
-                        </DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div className="text-center p-4 bg-destructive/10 rounded-xl">
-                          <div className="text-3xl font-bold text-destructive">${formatAmount(debt.totalAmount)}</div>
-                          <div className="text-sm text-muted-foreground mt-1">Monto total a transferir</div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="text-sm font-medium">Se confirmará en estos grupos:</div>
-                          {debt.groups.map((group) => (
-                            <div key={group.groupId} className="flex justify-between p-2 bg-muted/30 rounded text-sm">
-                              <span>{group.groupName}</span>
-                              <span className="font-medium">${formatAmount(group.amount)}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="text-xs text-muted-foreground text-center">
-                          💡 Tip: Usa la descripción "Vaquitapp - Pago consolidado" en tu transferencia
-                        </div>
-
-                        <Button
-                          onClick={() => confirmConsolidatedTransfer(debt)}
-                          className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
-                        >
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Sí, confirmar transferencia
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </TabsContent>
-
-        {/* Me Deben */}
-        <TabsContent value="debts-to-me" className="space-y-4">
-          {consolidatedDebtsToMe.length === 0 ? (
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-primary/5">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="text-4xl mb-4">💸</div>
-                <h3 className="text-xl font-bold text-primary mb-2">Nadie te debe dinero</h3>
-                <p className="text-muted-foreground text-center">Todos están al día contigo</p>
-              </CardContent>
-            </Card>
-          ) : (
-            consolidatedDebtsToMe.map((debt) => (
-              <Card key={debt.otherUserId} className="border-0 shadow-xl bg-gradient-to-br from-card to-accent/5">
-                <CardHeader>
-                  <CardTitle className="text-lg text-accent-foreground flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-5 w-5" />
-                      {debt.otherUserName} te debe
-                    </div>
-                    <div className="text-2xl font-bold">${formatAmount(debt.totalAmount)}</div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Desglose por grupo */}
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground">Desglose por grupo:</div>
-                    {debt.groups.map((group) => (
-                      <div key={group.groupId} className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                        <span className="text-sm">{group.groupName}</span>
-                        <Badge variant="outline" className="text-accent-foreground border-accent/30">
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge className="bg-destructive/20 text-destructive text-xs sm:text-sm">
                           ${formatAmount(group.amount)}
                         </Badge>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
+                </div>
 
-                  {/* Botón para compartir recordatorio */}
-                  <Button
-                    onClick={() => shareDebt(debt)}
-                    variant="outline"
-                    className="w-full border-accent/30 hover:bg-accent/10 text-accent-foreground bg-transparent"
-                  >
-                    <Share className="h-4 w-4 mr-2" />
-                    Enviar Recordatorio
-                  </Button>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
+                {/* Separador entre deudas */}
+                {index < consolidatedDebts.length - 1 && <div className="border-t border-muted/30 my-4"></div>}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-accent/5">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="mb-6 p-6 bg-accent/10 rounded-full">
+              <CreditCard className="h-12 w-12 text-accent-foreground" />
+            </div>
+            <h3 className="text-xl font-bold text-accent-foreground mb-2">¡Excelente! 🎉</h3>
+            <p className="text-muted-foreground text-center mb-4">No tienes deudas pendientes en ningún grupo</p>
+            <Button onClick={() => onNavigate("dashboard")} className="bg-primary hover:bg-primary/90">
+              Volver al inicio
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Información adicional */}
+      <div className="text-center p-4 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl">
+        <p className="text-sm text-muted-foreground">
+          💡 <strong>Tip:</strong> Puedes enviar recordatorios amigables a tus amigos para que sepan cuánto les debes
+        </p>
+      </div>
     </div>
   )
 }

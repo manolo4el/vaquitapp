@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 
-export type Page =
+type Page =
   | "dashboard"
   | "add-expense"
   | "profile"
@@ -11,40 +11,60 @@ export type Page =
   | "debt-consolidation"
   | "expense-detail"
 
+interface NavigationState {
+  currentPage: Page
+  selectedGroupId: string | null
+  selectedExpenseId: string | null
+  selectedInvitationId: string | null
+}
+
 export function useNavigation() {
-  const [currentPage, setCurrentPage] = useState<Page>("dashboard")
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
-  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null)
+  const [state, setState] = useState<NavigationState>({
+    currentPage: "dashboard",
+    selectedGroupId: null,
+    selectedExpenseId: null,
+    selectedInvitationId: null,
+  })
 
-  const navigateTo = (page: Page, groupId?: string, expenseId?: string) => {
-    console.log(
-      "Navigating to:",
-      page,
-      groupId ? `with group ${groupId}` : "",
-      expenseId ? `with expense ${expenseId}` : "",
-    )
-    setCurrentPage(page)
-    if (groupId) {
-      setSelectedGroupId(groupId)
-    } else if (page === "dashboard") {
-      setSelectedGroupId(null)
-    }
-    if (expenseId) {
-      setSelectedExpenseId(expenseId)
-    } else if (page !== "expense-detail") {
-      setSelectedExpenseId(null)
-    }
-  }
+  const navigateTo = useCallback((page: Page, param1?: string, param2?: string) => {
+    setState((prevState) => {
+      const newState: NavigationState = {
+        ...prevState,
+        currentPage: page,
+      }
 
-  const setGroupId = (groupId: string | null) => {
-    setSelectedGroupId(groupId)
-  }
+      // Reset all selections first
+      newState.selectedGroupId = null
+      newState.selectedExpenseId = null
+      newState.selectedInvitationId = null
+
+      // Set appropriate selection based on page
+      switch (page) {
+        case "group-details":
+        case "add-expense":
+          newState.selectedGroupId = param1 || null
+          break
+        case "group-join":
+          newState.selectedInvitationId = param1 || null
+          break
+        case "expense-detail":
+          newState.selectedGroupId = param1 || null
+          newState.selectedExpenseId = param2 || null
+          break
+        default:
+          // For dashboard, profile, debt-consolidation, no additional params needed
+          break
+      }
+
+      return newState
+    })
+  }, [])
 
   return {
-    currentPage,
-    selectedGroupId,
-    selectedExpenseId,
+    currentPage: state.currentPage,
+    selectedGroupId: state.selectedGroupId,
+    selectedExpenseId: state.selectedExpenseId,
+    selectedInvitationId: state.selectedInvitationId,
     navigateTo,
-    setSelectedGroupId: setGroupId,
   }
 }

@@ -21,25 +21,22 @@ import { NotificationsDropdown } from "@/components/notifications-dropdown"
 
 export default function Page() {
   const { user, userProfile, logout, loading, authError } = useAuth()
-  const { currentPage, selectedGroupId, selectedExpenseId, navigateTo } = useNavigation()
+  const { currentPage, selectedGroupId, selectedExpenseId, selectedInvitationId, navigateTo } = useNavigation()
   const { trackPageView, trackUserAction } = useAnalytics()
   const [loadingTimeout, setLoadingTimeout] = useState(false)
-  const [joinInvitationId, setJoinInvitationId] = useState<string | null>(null)
 
   // Verificar si hay un parámetro de invitación en la URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const invitationId = urlParams.get("invite")
-    if (invitationId && user && !joinInvitationId) {
-      setJoinInvitationId(invitationId)
+    if (invitationId && user && currentPage !== "group-join") {
       navigateTo("group-join", invitationId)
     }
-  }, [user, navigateTo, joinInvitationId])
+  }, [user, navigateTo, currentPage])
 
   // Limpiar el parámetro cuando se navega fuera de group-join
   useEffect(() => {
-    if (currentPage !== "group-join" && joinInvitationId) {
-      setJoinInvitationId(null)
+    if (currentPage !== "group-join") {
       // Limpiar la URL si no estamos en group-join
       const url = new URL(window.location.href)
       if (url.searchParams.has("invite")) {
@@ -47,7 +44,7 @@ export default function Page() {
         window.history.replaceState({}, "", url.toString())
       }
     }
-  }, [currentPage, joinInvitationId])
+  }, [currentPage])
 
   // Timeout para detectar si el loading se cuelga
   useEffect(() => {
@@ -130,111 +127,134 @@ export default function Page() {
   // Si no hay usuario, mostrar login
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
+      <>
         <LoginScreen />
         <Toaster />
-      </div>
+      </>
     )
   }
 
-  // Si hay error de autenticación, mostrar instrucciones de Firebase
-  if (authError) {
+  // Si hay error de permisos (usuario logueado pero sin acceso a Firestore)
+  if (user && !userProfile && authError?.includes("permission")) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
+      <>
         <FirebaseSetupInstructions />
         <Toaster />
-      </div>
+      </>
     )
   }
 
-  // Header común para páginas autenticadas
-  const renderHeader = () => {
-    if (currentPage === "dashboard") {
-      return (
-        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/40">
-          <div className="container mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Image src="/cow-logo.svg" alt="Vaquitapp" width={32} height={32} className="opacity-80" />
-                <div>
-                  <h1 className="text-lg font-bold text-primary">Vaquitapp</h1>
-                  <p className="text-xs text-muted-foreground">Tu rebaño financiero</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <NotificationsDropdown />
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => navigateTo("profile")}
-                  className="hover:bg-primary/10"
-                >
-                  {userProfile?.photoURL ? (
-                    <Image
-                      src={userProfile.photoURL || "/placeholder.svg"}
-                      alt="Profile"
-                      width={24}
-                      height={24}
-                      className="rounded-full"
-                    />
-                  ) : (
-                    <User className="h-4 w-4" />
-                  )}
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={logout}
-                  className="hover:bg-destructive/10 text-destructive"
-                >
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </header>
-      )
-    }
-    return null
-  }
-
-  // Renderizar contenido según la página actual
-  const renderContent = () => {
+  const renderCurrentPage = () => {
     switch (currentPage) {
-      case "dashboard":
-        return <EnhancedDashboard onNavigateToGroup={handleNavigateToGroup} />
-
       case "add-expense":
-        return <AddExpensePage groupId={selectedGroupId!} onNavigate={navigateTo} />
-
+        return selectedGroupId ? (
+          <AddExpensePage groupId={selectedGroupId} onNavigate={navigateTo} />
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
       case "profile":
-        return <UserProfilePage onNavigate={navigateTo} />
-
+        return (
+          <UserProfilePage
+            onNavigate={navigateTo}
+            returnTo={selectedInvitationId ? `group-join` : undefined}
+            returnGroupId={selectedInvitationId}
+          />
+        )
       case "group-details":
-        return <GroupDetailsPage groupId={selectedGroupId!} onNavigate={navigateTo} />
-
+        return selectedGroupId ? (
+          <GroupDetailsPage groupId={selectedGroupId} onNavigate={navigateTo} />
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
       case "group-join":
-        return <GroupJoinPage invitationId={joinInvitationId!} onNavigate={navigateTo} />
-
+        return selectedInvitationId ? (
+          <GroupJoinPage invitationId={selectedInvitationId} onNavigate={navigateTo} />
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
       case "debt-consolidation":
         return <DebtConsolidationPage onNavigate={navigateTo} />
-
       case "expense-detail":
-        return <ExpenseDetailPage groupId={selectedGroupId!} expenseId={selectedExpenseId!} onNavigate={navigateTo} />
-
+        return selectedGroupId && selectedExpenseId ? (
+          <ExpenseDetailPage groupId={selectedGroupId} expenseId={selectedExpenseId} onNavigate={navigateTo} />
+        ) : (
+          <EnhancedDashboard onNavigate={navigateTo} />
+        )
       default:
-        return <EnhancedDashboard onNavigateToGroup={handleNavigateToGroup} />
+        return <EnhancedDashboard onNavigate={navigateTo} />
     }
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
-      {renderHeader()}
-      <main className="container mx-auto px-4 py-6 max-w-4xl">{renderContent()}</main>
       <Toaster />
+
+      {/* Header */}
+      <header className="bg-card/80 backdrop-blur-sm shadow-lg border-b border-primary/10 sticky top-0 z-30">
+        <div className="max-w-md mx-auto px-4">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-br from-primary to-primary/80 rounded-xl">
+                <Image
+                  src="/cow-logo.svg"
+                  alt="Vaquitapp"
+                  width={24}
+                  height={24}
+                  className="filter brightness-0 invert"
+                />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                  Vaquitapp
+                </h1>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {/* Botón de Perfil */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigateTo("profile")}
+                className={`h-8 px-2 ${
+                  currentPage === "profile" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-primary"
+                }`}
+              >
+                <User className="h-4 w-4 mr-1" />
+                <span className="text-xs">Perfil</span>
+              </Button>
+
+              {/* Dropdown de Notificaciones */}
+              <NotificationsDropdown onNavigateToGroup={handleNavigateToGroup} />
+
+              {/* Indicador de perfil incompleto */}
+              {!userProfile?.paymentInfo && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigateTo("profile")}
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10 text-xs h-8"
+                >
+                  ⚠️
+                </Button>
+              )}
+
+              {/* Botón de Salir */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={logout}
+                className="border-primary/20 hover:bg-primary/10 h-8 w-8 bg-transparent"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="max-w-md mx-auto px-4 py-6">{renderCurrentPage()}</main>
     </div>
   )
 }
