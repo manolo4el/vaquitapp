@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 
-type Page =
+export type PageType =
   | "dashboard"
   | "add-expense"
   | "profile"
@@ -12,7 +12,7 @@ type Page =
   | "expense-detail"
 
 interface NavigationState {
-  currentPage: Page
+  currentPage: PageType
   selectedGroupId: string | null
   selectedExpenseId: string | null
   selectedInvitationId: string | null
@@ -26,7 +26,7 @@ export function useNavigation() {
     selectedInvitationId: null,
   })
 
-  const navigateTo = useCallback((page: Page, param1?: string, param2?: string) => {
+  const navigateTo = useCallback((page: PageType, param?: string, secondParam?: string) => {
     setState((prevState) => {
       const newState: NavigationState = {
         ...prevState,
@@ -38,21 +38,21 @@ export function useNavigation() {
       newState.selectedExpenseId = null
       newState.selectedInvitationId = null
 
-      // Set appropriate selection based on page
+      // Set the appropriate parameter based on the page
       switch (page) {
         case "group-details":
         case "add-expense":
-          newState.selectedGroupId = param1 || null
-          break
-        case "group-join":
-          newState.selectedInvitationId = param1 || null
+          newState.selectedGroupId = param || null
           break
         case "expense-detail":
-          newState.selectedGroupId = param1 || null
-          newState.selectedExpenseId = param2 || null
+          newState.selectedGroupId = param || null
+          newState.selectedExpenseId = secondParam || null
+          break
+        case "group-join":
+          newState.selectedInvitationId = param || null
           break
         default:
-          // For dashboard, profile, debt-consolidation, no additional params needed
+          // For other pages, no specific parameters needed
           break
       }
 
@@ -61,10 +61,7 @@ export function useNavigation() {
   }, [])
 
   return {
-    currentPage: state.currentPage,
-    selectedGroupId: state.selectedGroupId,
-    selectedExpenseId: state.selectedExpenseId,
-    selectedInvitationId: state.selectedInvitationId,
+    ...state,
     navigateTo,
   }
 }
