@@ -1,47 +1,41 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
+import { collection, onSnapshot, doc, getDoc, addDoc, updateDoc, getDocs, writeBatch } from "firebase/firestore"
 import {
-  collection,
-  onSnapshot,
-  addDoc,
-  doc,
-  getDoc,
-  getDocs,
-  updateDoc,
-  arrayUnion,
-  query,
-  where,
-  orderBy,
-  serverTimestamp,
-} from "firebase/firestore"
-import { calculateGroupBalances, getUserDisplayName, formatCurrency, parseInputNumber } from "@/lib/calculations"
-import { ArrowLeft, Plus, Users, DollarSign, Share2, MessageCircle, Mail, Receipt, ArrowRight, Eye } from "lucide-react"
+  calculateBalancesWithTransfers,
+  efficientTransfers,
+  getUserDisplayName,
+  formatAmount,
+} from "@/lib/calculations"
+import {
+  ArrowLeft,
+  Users,
+  ArrowRight,
+  Copy,
+  CreditCard,
+  Receipt,
+  Share,
+  Plus,
+  CheckCircle,
+  AlertTriangle,
+} from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { GroupChat } from "./group-chat"
-import { createInvitation } from "@/lib/invitations"
-import { createNotification } from "@/lib/notifications"
+import { FriendsSelector } from "@/components/friends-selector"
+import { GroupChat } from "@/components/group-chat"
 import Image from "next/image"
 import { useAnalytics } from "@/hooks/use-analytics"
+import { createNotification } from "@/lib/notifications"
 
 interface GroupDetailsPageProps {
   groupId: string
-  onNavigate: (page: string, param?: string, secondParam?: string) => void
-}
-
-interface Group {
-  id: string
-  name: string
-  members: string[]
-  createdAt: any
-  createdBy: string
+  onNavigate: (page: string, groupId?: string, expenseId?: string) => void
 }
 
 interface Expense {
@@ -70,16 +64,10 @@ interface Settlement {
 
 export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps) {
   const { user } = useAuth()
-  const [group, setGroup] = useState<Group | null>(null)
+  const [group, setGroup] = useState<any>(null)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
-  const [usersData, setUsersData] = useState<{ [key: string]: any }>({})
-  const [loading, setLoading] = useState(true)
-  const [newExpenseDesc, setNewExpenseDesc] = useState("")
-  const [newExpenseAmount, setNewExpenseAmount] = useState("")
-  const [newMemberEmail, setNewMemberEmail] = useState("")
-  const [addMemberMessage, setAddMemberMessage] = useState("")
-  const [isAddingMember, setIsAddingMember] = useState(false)
+  const [usersData, setUsersData] = useState<any>({})
   const [balances, setBalances] = useState<any>({})
   const [settlements, setSettlements] = useState<Settlement[]>([])
   const [userSettlements, setUserSettlements] = useState<Settlement[]>([])
@@ -88,96 +76,63 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
   const [pendingNewMembers, setPendingNewMembers] = useState<string[]>([])
   const { trackGroupAction, trackUserAction } = useAnalytics()
 
-  const [calculatedBalances, setCalculatedBalances] = useState<any>({})
-  const [calculatedSettlements, setCalculatedSettlements] = useState<Settlement[]>([])
-  const [totalExpenses, setTotalExpenses] = useState<number>(0)
-
-  // Cargar datos del grupo
   useEffect(() => {
-    if (!groupId || !user) return
+    const loadGroupData = async () => {
+      if (!groupId) return
 
-    const groupRef = doc(db, "groups", groupId)
-    const unsubscribeGroup = onSnapshot(
-      groupRef,
-      async (doc) => {
-        if (doc.exists()) {
-          const groupData = { id: doc.id, ...doc.data() } as Group
+      // Escuchar cambios en el documento del grupo
+      const groupUnsub = onSnapshot(doc(db, "groups", groupId), async (groupDoc) => {
+        if (groupDoc.exists()) {
+          const groupData = { id: groupDoc.id, ...groupDoc.data() }
           setGroup(groupData)
 
-          // Cargar datos de usuarios del grupo
-          const usersInfo: { [key: string]: any } = {}
-          for (const memberId of groupData.members) {
-            try {
-              const userDoc = await getDoc(doc(db, "users", memberId))
-              if (userDoc.exists()) {
-                usersInfo[memberId] = userDoc.data()
-              }
-            } catch (error) {
-              console.error(`Error loading user ${memberId}:`, error)
+          // Cargar datos de usuarios (incluyendo nuevos miembros)
+          const usersPromises = groupData.members.map((uid: string) => getDoc(doc(db, "users", uid)))
+          const usersSnaps = await Promise.all(usersPromises)
+          const usersDataMap: any = {}
+          usersSnaps.forEach((snap) => {
+            if (snap.exists()) {
+              usersDataMap[snap.id] = snap.data()
             }
-          }
-          setUsersData(usersInfo)
-        } else {
-          toast({
-            title: "Error",
-            description: "Grupo no encontrado",
-            variant: "destructive",
           })
-          onNavigate("dashboard")
+          setUsersData(usersDataMap)
         }
-      },
-      (error) => {
-        console.error("Error fetching group:", error)
-        toast({
-          title: "Error",
-          description: "No se pudo cargar el grupo",
-          variant: "destructive",
-        })
-      },
-    )
+      })
 
-    // Cargar gastos
-    const expensesRef = collection(db, "groups", groupId, "expenses")
-    const expensesQuery = query(expensesRef, orderBy("createdAt", "desc"))
-    const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
-      const expensesData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Expense[]
-      setExpenses(expensesData)
-    })
+      // Escuchar cambios en gastos
+      const expensesUnsub = onSnapshot(collection(db, "groups", groupId, "expenses"), (snapshot) => {
+        const expensesData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Expense[]
+        setExpenses(expensesData.sort((a, b) => b.createdAt?.toDate() - a.createdAt?.toDate()))
+      })
 
-    // Cargar transferencias
-    const transfersRef = collection(db, "groups", groupId, "transfers")
-    const unsubscribeTransfers = onSnapshot(transfersRef, (snapshot) => {
-      const transfersData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Transfer[]
-      setTransfers(transfersData)
-      setLoading(false)
-    })
+      // Escuchar cambios en transferencias
+      const transfersUnsub = onSnapshot(collection(db, "groups", groupId, "transfers"), (snapshot) => {
+        const transfersData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Transfer[]
+        setTransfers(transfersData.sort((a, b) => b.confirmedAt?.toDate() - a.confirmedAt?.toDate()))
+      })
 
-    return () => {
-      unsubscribeGroup()
-      unsubscribeExpenses()
-      unsubscribeTransfers()
+      return () => {
+        groupUnsub()
+        expensesUnsub()
+        transfersUnsub()
+      }
     }
-  }, [groupId, user, onNavigate])
+
+    loadGroupData()
+  }, [groupId])
 
   useEffect(() => {
-    if (group && expenses.length >= 0 && transfers.length >= 0) {
-      const {
-        balances: calculatedBalances,
-        settlements: calculatedSettlements,
-        totalExpenses,
-      } = calculateGroupBalances(group.members, expenses, transfers)
-      setCalculatedBalances(calculatedBalances)
-      setCalculatedSettlements(calculatedSettlements)
-      setTotalExpenses(totalExpenses)
-
-      const userBalance = calculatedBalances[user?.uid || ""] || 0
+    if (group && expenses.length >= 0) {
+      const calculatedBalances = calculateBalancesWithTransfers(group.members, expenses, transfers)
       setBalances(calculatedBalances)
+
+      const calculatedSettlements = efficientTransfers(calculatedBalances)
       setSettlements(calculatedSettlements)
 
       // Filtrar liquidaciones donde el usuario actual debe dinero
@@ -191,130 +146,8 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
     window.scrollTo(0, 0)
   }, [])
 
-  const addExpense = async () => {
-    if (!newExpenseDesc.trim() || !newExpenseAmount || !user || !group) return
-
-    const amount = parseInputNumber(newExpenseAmount)
-    if (isNaN(amount) || amount <= 0) {
-      toast({
-        title: "Error",
-        description: "Ingresa un monto válido",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      const expenseRef = await addDoc(collection(db, "groups", groupId, "expenses"), {
-        description: newExpenseDesc.trim(),
-        amount,
-        paidBy: user.uid,
-        participants: group.members,
-        createdAt: serverTimestamp(),
-      })
-
-      // Crear notificaciones para otros miembros
-      const otherMembers = group.members.filter((memberId) => memberId !== user.uid)
-      for (const memberId of otherMembers) {
-        await createNotification({
-          userId: memberId,
-          type: "expense_added",
-          title: "Nuevo gasto agregado",
-          message: `${getUserDisplayName(user.uid, usersData)} agregó "${newExpenseDesc}" por ${formatCurrency(amount)}`,
-          groupId: groupId,
-          expenseId: expenseRef.id,
-        })
-      }
-
-      setNewExpenseDesc("")
-      setNewExpenseAmount("")
-      toast({
-        title: "¡Gasto agregado!",
-        description: `Se agregó "${newExpenseDesc}" por ${formatCurrency(amount)}`,
-      })
-    } catch (error) {
-      console.error("Error adding expense:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo agregar el gasto",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const addMember = async () => {
-    if (!newMemberEmail.trim() || !group) return
-
-    setIsAddingMember(true)
-    try {
-      const q = query(collection(db, "users"), where("email", "==", newMemberEmail.trim()))
-      const snapshot = await getDocs(q)
-
-      if (snapshot.empty) {
-        setAddMemberMessage("No existe usuario con ese email")
-        return
-      }
-
-      const userToAdd = snapshot.docs[0]
-      const uidToAdd = userToAdd.id
-
-      if (group.members.includes(uidToAdd)) {
-        setAddMemberMessage("Ya es miembro del grupo")
-        return
-      }
-
-      const groupRef = doc(db, "groups", groupId)
-      await updateDoc(groupRef, { members: arrayUnion(uidToAdd) })
-
-      // Crear notificación para el nuevo miembro
-      await createNotification({
-        userId: uidToAdd,
-        type: "member_added",
-        title: "Te agregaron a un grupo",
-        message: `${getUserDisplayName(user!.uid, usersData)} te agregó al grupo "${group.name}"`,
-        groupId: groupId,
-      })
-
-      setAddMemberMessage("Miembro agregado exitosamente")
-      setNewMemberEmail("")
-      setTimeout(() => setAddMemberMessage(""), 3000)
-    } catch (error) {
-      console.error("Error adding member:", error)
-      setAddMemberMessage("Error al agregar miembro")
-    } finally {
-      setIsAddingMember(false)
-    }
-  }
-
-  const shareGroup = async () => {
-    if (!group || !user) return
-
-    try {
-      const invitationId = await createInvitation(groupId, user.uid)
-      const shareUrl = `${window.location.origin}?invite=${invitationId}`
-
-      if (navigator.share) {
-        await navigator.share({
-          title: `Únete a "${group.name}" en Vaquitapp`,
-          text: `¡Hola! Te invito a unirte a nuestro grupo "${group.name}" para dividir gastos fácilmente.`,
-          url: shareUrl,
-        })
-      } else {
-        await navigator.clipboard.writeText(shareUrl)
-        toast({
-          title: "¡Enlace copiado!",
-          description: "El enlace de invitación se copió al portapapeles",
-        })
-      }
-    } catch (error) {
-      console.error("Error sharing group:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo compartir el grupo",
-        variant: "destructive",
-      })
-    }
-  }
+  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const userBalance = balances[user?.uid || ""] || 0
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -346,7 +179,7 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
 
       // Crear notificación para el usuario que recibe el pago
       const fromUserName = usersData[settlement.from]?.displayName || usersData[settlement.from]?.email || "Alguien"
-      const message = `${fromUserName} confirmó el pago de $${formatCurrency(settlement.amount)}`
+      const message = `${fromUserName} confirmó el pago de $${formatAmount(settlement.amount)}`
 
       await createNotification({
         userId: settlement.to,
@@ -363,12 +196,64 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
 
       toast({
         title: "¡Transferencia confirmada! 💸",
-        description: `Se registró el pago de $${formatCurrency(settlement.amount)} a ${getUserDisplayName(settlement.to, usersData)}`,
+        description: `Se registró el pago de $${formatAmount(settlement.amount)} a ${getUserDisplayName(settlement.to, usersData)}`,
       })
     } catch (error) {
       toast({
         title: "Error",
         description: "No se pudo confirmar la transferencia",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (!group) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  const shareGroup = async () => {
+    const shareUrl = `${window.location.origin}?join=${groupId}`
+    const shareText = `¡Te invito al rebaño "${group.name}" en Vaquitapp! 🐄\n\nÚnete aquí: ${shareUrl}`
+
+    // Intentar usar la Web Share API nativa
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Únete al rebaño: ${group.name}`,
+          text: shareText,
+          url: shareUrl,
+        })
+
+        trackGroupAction("group_share_attempted", groupId, {
+          share_method: "native",
+        })
+        return
+      } catch (error) {
+        // Si el usuario cancela, no hacer nada más
+        if (error.name === "AbortError") return
+        console.log("Share failed:", error)
+      }
+    }
+
+    // Fallback: copiar al portapapeles si no hay Web Share API
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      toast({
+        title: "¡Enlace copiado! 🔗",
+        description: "Comparte este enlace para invitar amigos al rebaño",
+      })
+
+      trackGroupAction("group_share_attempted", groupId, {
+        share_method: "clipboard",
+      })
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "No se pudo compartir el enlace",
         variant: "destructive",
       })
     }
@@ -413,10 +298,37 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
       )
       await Promise.all(notificationPromises)
 
-      toast({
-        title: "¡Miembros agregados! 👥",
-        description: `Se agregaron ${pendingNewMembers.length} nuevo${pendingNewMembers.length !== 1 ? "s" : ""} miembro${pendingNewMembers.length !== 1 ? "s" : ""} al rebaño`,
-      })
+      // Si se debe incluir en gastos existentes, actualizar todos los gastos
+      if (includeInExistingExpenses && expenses.length > 0) {
+        const batch = writeBatch(db)
+
+        // Obtener todos los gastos del grupo
+        const expensesSnapshot = await getDocs(collection(db, "groups", groupId, "expenses"))
+
+        expensesSnapshot.docs.forEach((expenseDoc) => {
+          const expenseData = expenseDoc.data()
+          const currentParticipants = expenseData.participants || group.members
+
+          // Agregar los nuevos miembros a los participantes de cada gasto
+          const updatedParticipants = [...new Set([...currentParticipants, ...pendingNewMembers])]
+
+          batch.update(expenseDoc.ref, {
+            participants: updatedParticipants,
+          })
+        })
+
+        await batch.commit()
+
+        toast({
+          title: "¡Miembros agregados! 👥",
+          description: `Se agregaron ${pendingNewMembers.length} nuevo${pendingNewMembers.length !== 1 ? "s" : ""} miembro${pendingNewMembers.length !== 1 ? "s" : ""} al rebaño y se incluyeron en todos los gastos existentes`,
+        })
+      } else {
+        toast({
+          title: "¡Miembros agregados! 👥",
+          description: `Se agregaron ${pendingNewMembers.length} nuevo${pendingNewMembers.length !== 1 ? "s" : ""} miembro${pendingNewMembers.length !== 1 ? "s" : ""} al rebaño`,
+        })
+      }
 
       setSelectedNewMembers([])
       setPendingNewMembers([])
@@ -430,396 +342,485 @@ export function GroupDetailsPage({ groupId, onNavigate }: GroupDetailsPageProps)
     }
   }
 
-  if (loading || !group) {
-    return (
-      <div className="space-y-6">
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Cargando grupo...</p>
-        </div>
-      </div>
-    )
-  }
-
-  const userBalance = calculatedBalances[user?.uid || ""] || 0
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => onNavigate("dashboard")} className="hover:bg-primary/10">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-primary">{group.name}</h1>
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            {group.members.length} miembros • {formatCurrency(totalExpenses)} gastados
-          </p>
-        </div>
+    <div className="space-y-4 sm:space-y-6 pb-6">
+      {/* Header - Responsive */}
+      <div className="flex items-center gap-3 sm:gap-4">
         <Button
           variant="outline"
           size="icon"
-          onClick={shareGroup}
-          className="border-primary/20 hover:bg-primary/10 bg-transparent"
+          onClick={() => onNavigate("dashboard")}
+          className="border-primary/20 hover:bg-primary/10 h-9 w-9 sm:h-10 sm:w-10"
         >
-          <Share2 className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2 truncate">
+            <Users className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
+            <span className="truncate">{group.name}</span>
+          </h1>
+          <p className="text-sm text-muted-foreground truncate">
+            {group.members.length} miembros • ${formatAmount(totalExpenses)} total
+          </p>
+        </div>
+        <Button
+          onClick={() => onNavigate("add-expense", groupId)}
+          className="bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-accent-foreground h-9 px-3 sm:h-10 sm:px-4 text-sm sm:text-base"
+        >
+          <Plus className="h-4 w-4 mr-1 sm:mr-2" />
+          <span className="hidden xs:inline">Agregar</span>
+          <span className="hidden sm:inline"> Gasto</span>
         </Button>
       </div>
 
-      {/* Balance del usuario */}
-      <Card className="border-0 bg-gradient-to-br from-card to-primary/5">
-        <CardContent className="p-6">
-          <div className="text-center space-y-3">
-            <div className="text-sm text-muted-foreground">Tu balance en este grupo</div>
-            <div className="space-y-2">
-              {userBalance > 0 ? (
-                <div className="text-accent-foreground">
-                  <div className="text-3xl font-bold text-accent">+{formatCurrency(userBalance)}</div>
-                  <div className="text-sm bg-accent/20 px-3 py-1 rounded-full inline-block">¡Te deben dinero! 🎉</div>
-                </div>
-              ) : userBalance < 0 ? (
-                <div className="text-destructive">
-                  <div className="text-3xl font-bold">{formatCurrency(userBalance)}</div>
-                  <div className="text-sm bg-destructive/20 px-3 py-1 rounded-full inline-block">Debes dinero 💸</div>
-                </div>
-              ) : (
-                <div className="text-primary">
-                  <div className="text-3xl font-bold">{formatCurrency(0)}</div>
-                  <div className="text-sm bg-primary/20 px-3 py-1 rounded-full inline-block">¡Estás al día! ✨</div>
-                </div>
-              )}
+      {/* Gestionar miembros - Responsive */}
+      <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-accent/5">
+        <CardContent className="p-3 sm:p-4">
+          <div className="space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-accent/20 rounded-full">
+                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-accent-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-accent-foreground text-sm sm:text-base">Gestionar miembros</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">Invitar amigos o compartir enlace</div>
+              </div>
             </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <FriendsSelector
+                selectedFriends={selectedNewMembers}
+                onFriendsChange={setSelectedNewMembers}
+                title="Agregar Amigos al Grupo"
+                description="Selecciona amigos para agregar a este rebaño"
+                trigger={
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-accent/30 hover:bg-accent/10 text-accent-foreground bg-transparent h-9 sm:h-10 text-sm"
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    Agregar Amigos
+                  </Button>
+                }
+              />
+
+              <Button
+                onClick={shareGroup}
+                variant="outline"
+                className="border-accent/30 hover:bg-accent/10 text-accent-foreground bg-transparent h-9 sm:h-10 text-sm"
+              >
+                <Share className="h-4 w-4 mr-2" />
+                Compartir
+              </Button>
+            </div>
+
+            {selectedNewMembers.length > 0 && (
+              <Button
+                onClick={handleAddMembersClick}
+                className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary h-9 sm:h-10 text-sm"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Agregar {selectedNewMembers.length} miembro{selectedNewMembers.length !== 1 ? "s" : ""} al grupo
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Tabs */}
-      <Tabs defaultValue="expenses" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 bg-muted/30">
-          <TabsTrigger value="expenses" className="text-xs">
-            <Receipt className="h-4 w-4 mr-1" />
-            Gastos
-          </TabsTrigger>
-          <TabsTrigger value="balances" className="text-xs">
-            <DollarSign className="h-4 w-4 mr-1" />
-            Balances
-          </TabsTrigger>
-          <TabsTrigger value="members" className="text-xs">
-            <Users className="h-4 w-4 mr-1" />
-            Miembros
-          </TabsTrigger>
-          <TabsTrigger value="chat" className="text-xs">
-            <MessageCircle className="h-4 w-4 mr-1" />
-            Chat
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="expenses" className="space-y-4">
-          {/* Agregar gasto */}
-          <Card className="border-0 bg-gradient-to-br from-card to-accent/5">
-            <CardHeader>
-              <CardTitle className="text-lg text-primary flex items-center gap-2">
-                <Plus className="h-5 w-5" />
-                Agregar Gasto
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3">
-                <Input
-                  placeholder="¿En qué gastaste?"
-                  value={newExpenseDesc}
-                  onChange={(e) => setNewExpenseDesc(e.target.value)}
-                  className="border-primary/20 focus:border-primary"
-                />
-                <div className="flex gap-2">
-                  <Input
-                    type="text"
-                    placeholder="¿Cuánto?"
-                    value={newExpenseAmount}
-                    onChange={(e) => setNewExpenseAmount(e.target.value)}
-                    className="border-primary/20 focus:border-primary"
-                  />
-                  <Button
-                    onClick={addExpense}
-                    disabled={!newExpenseDesc.trim() || !newExpenseAmount}
-                    className="bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-accent-foreground px-6"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Agregar
-                  </Button>
+      {/* Diálogo para incluir en gastos existentes */}
+      <Dialog open={showIncludeInExpensesDialog} onOpenChange={setShowIncludeInExpensesDialog}>
+        <DialogContent className="max-w-sm sm:max-w-md mx-4">
+          <DialogHeader>
+            <DialogTitle className="text-primary flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Incluir en gastos existentes
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-gradient-to-r from-primary/10 to-accent/10 rounded-xl border border-primary/20">
+              <div className="text-center space-y-2">
+                <div className="text-primary font-medium">
+                  Este grupo ya tiene {expenses.length} gasto{expenses.length !== 1 ? "s" : ""} registrado
+                  {expenses.length !== 1 ? "s" : ""}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  ¿Quieres incluir a {pendingNewMembers.length > 1 ? "los nuevos miembros" : "el nuevo miembro"} en las
+                  deudas ya generadas?
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Lista de gastos */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Historial de Gastos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {expenses.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8">
-                  <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No hay gastos registrados</p>
-                  <p className="text-sm">¡Agrega el primer gasto del grupo!</p>
+            <div className="space-y-3">
+              <div className="p-3 bg-accent/10 rounded-lg border border-accent/20">
+                <div className="font-medium text-accent-foreground text-sm mb-1">✅ Si incluyo:</div>
+                <div className="text-xs text-muted-foreground">
+                  {pendingNewMembers.length > 1 ? "Los nuevos miembros" : "El nuevo miembro"} participará en todos los
+                  gastos existentes y las deudas se redistribuirán entre más personas.
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {expenses.map((expense) => (
-                    <div
-                      key={expense.id}
-                      className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => onNavigate("expense-detail", groupId, expense.id)}
-                    >
-                      <div className="flex-shrink-0">
-                        {usersData[expense.paidBy]?.photoURL ? (
-                          <Image
-                            src={usersData[expense.paidBy].photoURL || "/placeholder.svg"}
-                            alt={getUserDisplayName(expense.paidBy, usersData)}
-                            width={40}
-                            height={40}
-                            className="rounded-full"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                            <DollarSign className="h-5 w-5 text-primary" />
-                          </div>
-                        )}
+              </div>
+
+              <div className="p-3 bg-secondary/10 rounded-lg border border-secondary/20">
+                <div className="font-medium text-secondary-foreground text-sm mb-1">❌ Si no incluyo:</div>
+                <div className="text-xs text-muted-foreground">
+                  {pendingNewMembers.length > 1 ? "Los nuevos miembros" : "El nuevo miembro"} solo participará en gastos
+                  futuros. Las deudas actuales quedan como están.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={() => addMembersToGroup(true)}
+                className="w-full bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-accent-foreground"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Sí, incluir en gastos existentes
+              </Button>
+              <Button
+                onClick={() => addMembersToGroup(false)}
+                variant="outline"
+                className="w-full border-secondary/30 hover:bg-secondary/10 text-secondary-foreground bg-transparent"
+              >
+                No, solo gastos futuros
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tu Balance - Responsive */}
+      <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-secondary/5">
+        <CardHeader className="pb-3 sm:pb-4">
+          <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
+            💰 Tu Balance en este Rebaño
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center p-4 sm:p-6 rounded-xl bg-gradient-to-br from-muted/30 to-secondary/10">
+            {userBalance > 0 ? (
+              <div className="text-accent-foreground">
+                <div className="text-3xl sm:text-4xl font-bold">+${formatAmount(userBalance)}</div>
+                <div className="text-xs sm:text-sm bg-accent/20 px-3 py-1 rounded-full inline-block mt-2">
+                  ¡Te deben dinero! 🎉
+                </div>
+              </div>
+            ) : userBalance < 0 ? (
+              <div className="text-destructive">
+                <div className="text-3xl sm:text-4xl font-bold">${formatAmount(userBalance)}</div>
+                <div className="text-xs sm:text-sm bg-destructive/20 px-3 py-1 rounded-full inline-block mt-2">
+                  Debes dinero 💸
+                </div>
+              </div>
+            ) : (
+              <div className="text-primary">
+                <div className="text-3xl sm:text-4xl font-bold">$0,00</div>
+                <div className="text-xs sm:text-sm bg-primary/20 px-3 py-1 rounded-full inline-block mt-2">
+                  ¡Estás al día! ✨
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Transferencias Pendientes - Responsive */}
+      {userSettlements.length > 0 && (
+        <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-destructive/5">
+          <CardHeader className="pb-3 sm:pb-4">
+            <CardTitle className="text-lg sm:text-xl text-destructive flex items-center gap-2">
+              💸 Tus Transferencias Pendientes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {userSettlements.map((settlement, index) => (
+              <Dialog key={index}>
+                <DialogTrigger asChild>
+                  <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-destructive/10 to-destructive/5 rounded-xl cursor-pointer hover:bg-destructive/15 transition-colors border border-destructive/20">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="p-2 bg-destructive/20 rounded-full">
+                        <CreditCard className="h-4 w-4 text-destructive" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm">{expense.description}</div>
-                        <div className="text-xs text-muted-foreground">
-                          Pagado por {getUserDisplayName(expense.paidBy, usersData)}
+                        <div className="font-medium text-destructive text-sm sm:text-base truncate">
+                          Transferir a {getUserDisplayName(settlement.to, usersData)}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {expense.createdAt?.toDate?.()?.toLocaleDateString() || "Fecha no disponible"}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">
-                          {formatCurrency(expense.amount)}
-                        </Badge>
-                        <Eye className="h-4 w-4 text-muted-foreground" />
+                        <div className="text-xs sm:text-sm text-muted-foreground">Toca para ver detalles</div>
                       </div>
                     </div>
-                  ))}
+                    <div className="text-right flex-shrink-0 ml-2">
+                      <div className="text-base sm:text-lg font-bold text-destructive">
+                        ${formatAmount(settlement.amount)}
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground ml-auto" />
+                    </div>
+                  </div>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm sm:max-w-md mx-4">
+                  <DialogHeader>
+                    <DialogTitle className="text-destructive flex items-center gap-2 text-lg">
+                      💸 Transferir a {getUserDisplayName(settlement.to, usersData)}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="text-center p-4 bg-destructive/10 rounded-xl">
+                      <div className="text-2xl sm:text-3xl font-bold text-destructive">
+                        ${formatAmount(settlement.amount)}
+                      </div>
+                      <div className="text-xs sm:text-sm text-muted-foreground mt-1">Monto a transferir</div>
+                    </div>
+
+                    {usersData[settlement.to]?.paymentInfo ? (
+                      <div className="space-y-3">
+                        <div className="p-3 sm:p-4 bg-gradient-to-r from-accent/10 to-secondary/10 rounded-xl border border-accent/20">
+                          <div className="space-y-2">
+                            <div className="font-medium text-accent-foreground text-sm">Información de pago:</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm sm:text-base font-mono bg-white/50 px-2 py-1 rounded flex-1 break-all">
+                                {usersData[settlement.to].paymentInfo}
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => copyToClipboard(usersData[settlement.to].paymentInfo)}
+                                className="bg-transparent flex-shrink-0"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-muted-foreground text-center">
+                          💡 Tip: Usa la descripción "Vaquitapp - {group.name}" en tu transferencia
+                        </div>
+
+                        <div className="p-3 sm:p-4 bg-gradient-to-r from-primary/10 to-accent/10 rounded-xl border border-primary/20">
+                          <div className="text-center space-y-3">
+                            <div className="text-sm text-primary font-medium">¿Ya realizaste la transferencia?</div>
+                            <Button
+                              onClick={() => confirmTransfer(settlement)}
+                              className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary h-9 sm:h-10 text-sm"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Confirmar Transferencia
+                            </Button>
+                            <div className="text-xs text-muted-foreground">Esto actualizará los balances del grupo</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-destructive/10 rounded-xl text-center">
+                        <div className="text-destructive font-medium text-sm">⚠️ Sin información de pago</div>
+                        <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+                          {getUserDisplayName(settlement.to, usersData)} debe completar su perfil
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Transferencias Confirmadas - Responsive */}
+      {transfers.length > 0 && (
+        <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-primary/5">
+          <CardHeader className="pb-3 sm:pb-4">
+            <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
+              ✅ Transferencias Confirmadas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 sm:space-y-3 max-h-48 overflow-y-auto">
+              {transfers.map((transfer) => (
+                <div key={transfer.id} className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    <div className="p-1.5 sm:p-2 bg-primary/20 rounded-full">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-xs sm:text-sm truncate">
+                        {getUserDisplayName(transfer.from, usersData)} → {getUserDisplayName(transfer.to, usersData)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {transfer.confirmedAt?.toDate().toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm sm:text-lg font-bold text-primary flex-shrink-0">
+                    ${formatAmount(transfer.amount)}
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="balances" className="space-y-4">
-          {/* Balances individuales */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Balances del Grupo</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {group.members.map((memberId) => {
-                  const balance = calculatedBalances[memberId] || 0
-                  const memberData = usersData[memberId]
-
-                  return (
-                    <div key={memberId} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                      <div className="flex-shrink-0">
-                        {memberData?.photoURL ? (
-                          <Image
-                            src={memberData.photoURL || "/placeholder.svg"}
-                            alt={getUserDisplayName(memberId, usersData)}
-                            width={40}
-                            height={40}
-                            className="rounded-full"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                            <Users className="h-5 w-5 text-primary" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium">{getUserDisplayName(memberId, usersData)}</div>
-                        <div className="text-sm text-muted-foreground">{memberData?.email}</div>
-                      </div>
-                      <div className="text-right">
-                        <div
-                          className={`font-bold ${balance > 0 ? "text-accent" : balance < 0 ? "text-destructive" : "text-primary"}`}
-                        >
-                          {balance > 0 ? "+" : ""}
-                          {formatCurrency(balance)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {balance > 0 ? "Le deben" : balance < 0 ? "Debe" : "Al día"}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Transferencias sugeridas */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Transferencias Sugeridas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {calculatedSettlements.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-4xl mb-3">🎊</div>
-                  <div className="text-lg font-semibold text-accent-foreground">¡Todo saldado!</div>
-                  <div className="text-sm text-muted-foreground">El rebaño está en paz</div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {calculatedSettlements.map((settlement, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-3 p-3 bg-gradient-to-r from-secondary/10 to-primary/10 rounded-lg"
-                    >
-                      <div className="flex-shrink-0">
-                        {usersData[settlement.from]?.photoURL ? (
-                          <Image
-                            src={usersData[settlement.from].photoURL || "/placeholder.svg"}
-                            alt={getUserDisplayName(settlement.from, usersData)}
-                            width={32}
-                            height={32}
-                            className="rounded-full"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
-                            <Users className="h-4 w-4 text-primary" />
-                          </div>
-                        )}
-                      </div>
-                      <span className="font-medium text-primary">{getUserDisplayName(settlement.from, usersData)}</span>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      <div className="flex-shrink-0">
-                        {usersData[settlement.to]?.photoURL ? (
-                          <Image
-                            src={usersData[settlement.to].photoURL || "/placeholder.svg"}
-                            alt={getUserDisplayName(settlement.to, usersData)}
-                            width={32}
-                            height={32}
-                            className="rounded-full"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
-                            <Users className="h-4 w-4 text-primary" />
-                          </div>
-                        )}
-                      </div>
-                      <span className="font-medium text-primary">{getUserDisplayName(settlement.to, usersData)}</span>
-                      <Badge className="ml-auto bg-accent/20 text-accent-foreground">
-                        {formatCurrency(settlement.amount)}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="members" className="space-y-4">
-          {/* Lista de miembros */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Miembros del Grupo</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {group.members.map((memberId) => {
-                  const memberData = usersData[memberId]
-                  const isCreator = memberId === group.createdBy
-
-                  return (
-                    <div key={memberId} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                      <div className="flex-shrink-0">
-                        {memberData?.photoURL ? (
-                          <Image
-                            src={memberData.photoURL || "/placeholder.svg"}
-                            alt={getUserDisplayName(memberId, usersData)}
-                            width={40}
-                            height={40}
-                            className="rounded-full"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                            <Users className="h-5 w-5 text-primary" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium flex items-center gap-2">
-                          {getUserDisplayName(memberId, usersData)}
-                          {isCreator && (
-                            <Badge variant="secondary" className="text-xs">
-                              Creador
-                            </Badge>
-                          )}
-                          {memberId === user?.uid && (
-                            <Badge variant="outline" className="text-xs">
-                              Tú
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-sm text-muted-foreground">{memberData?.email}</div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Agregar miembro */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Invitar Amigo</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  type="email"
-                  placeholder="Email del amigo"
-                  value={newMemberEmail}
-                  onChange={(e) => setNewMemberEmail(e.target.value)}
-                  disabled={isAddingMember}
-                  className="border-primary/20 focus:border-primary"
-                />
-                <Button
-                  onClick={addMember}
-                  disabled={isAddingMember || !newMemberEmail.trim()}
-                  className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
-                >
-                  <Mail className="h-4 w-4 mr-2" />
-                  {isAddingMember ? "Agregando..." : "Invitar"}
-                </Button>
-              </div>
-              {addMemberMessage && (
+      {/* Liquidación Completa - Responsive */}
+      <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-accent/5">
+        <CardHeader className="pb-3 sm:pb-4">
+          <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
+            🔄 Liquidación Completa del Grupo
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {settlements.length === 0 ? (
+            <div className="text-center py-6 sm:py-8">
+              <div className="text-3xl sm:text-4xl mb-3">🎊</div>
+              <div className="text-base sm:text-lg font-semibold text-accent-foreground">¡Todo saldado!</div>
+              <div className="text-sm text-muted-foreground">El rebaño está en paz</div>
+            </div>
+          ) : (
+            <div className="space-y-2 sm:space-y-3">
+              {settlements.map((settlement, index) => (
                 <div
-                  className={`text-sm p-2 rounded ${
-                    addMemberMessage.includes("exitosamente")
-                      ? "text-accent-foreground bg-accent/20"
-                      : "text-destructive bg-destructive/20"
-                  }`}
+                  key={index}
+                  className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gradient-to-r from-secondary/10 to-primary/10 rounded-xl"
                 >
-                  {addMemberMessage}
+                  <span className="font-medium text-primary text-sm sm:text-base flex-1 truncate">
+                    {getUserDisplayName(settlement.from, usersData)}
+                  </span>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <span className="font-medium text-primary text-sm sm:text-base flex-1 truncate">
+                    {getUserDisplayName(settlement.to, usersData)}
+                  </span>
+                  <Badge className="ml-auto bg-accent/20 text-accent-foreground text-xs sm:text-sm flex-shrink-0">
+                    ${formatAmount(settlement.amount)}
+                  </Badge>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        <TabsContent value="chat">
-          <GroupChat groupId={groupId} groupName={group.name} usersData={usersData} />
-        </TabsContent>
-      </Tabs>
+      {/* Balances Individuales - Responsive */}
+      <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-primary/5">
+        <CardHeader className="pb-3 sm:pb-4">
+          <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
+            📊 Balances Individuales
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 sm:space-y-3">
+            {group.members.map((memberId: string) => {
+              const balance = balances[memberId] || 0
+              return (
+                <div key={memberId} className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    {usersData[memberId]?.photoURL ? (
+                      <Image
+                        src={usersData[memberId].photoURL || "/placeholder.svg"}
+                        alt="Avatar"
+                        width={32}
+                        height={32}
+                        className="h-7 w-7 sm:h-8 sm:w-8 rounded-full flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="h-7 w-7 sm:h-8 sm:w-8 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Users className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm sm:text-base truncate">
+                        {getUserDisplayName(memberId, usersData)}
+                      </div>
+                      {memberId === user?.uid && <div className="text-xs text-muted-foreground">(Tú)</div>}
+                    </div>
+                  </div>
+                  <div
+                    className={`text-base sm:text-lg font-bold flex-shrink-0 ${
+                      balance > 0 ? "text-accent-foreground" : balance < 0 ? "text-destructive" : "text-primary"
+                    }`}
+                  >
+                    {balance > 0 ? "+" : ""}${formatAmount(balance)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Historial de Gastos - MEJORADO Y RESPONSIVE */}
+      <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-secondary/5">
+        <CardHeader className="pb-3 sm:pb-4">
+          <CardTitle className="text-lg sm:text-xl text-primary flex items-center gap-2">
+            <Receipt className="h-4 w-4 sm:h-5 sm:w-5" />
+            Historial de Gastos
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {expenses.length === 0 ? (
+            <div className="text-center text-muted-foreground py-6 sm:py-8">
+              <div className="text-3xl sm:text-4xl mb-3">📝</div>
+              <div className="text-sm sm:text-base">No hay gastos registrados</div>
+              <div className="text-xs sm:text-sm mt-1">¡Agrega el primer gasto!</div>
+            </div>
+          ) : (
+            <div className="space-y-2 sm:space-y-3 max-h-80 sm:max-h-96 overflow-y-auto">
+              {expenses.map((expense) => (
+                <div
+                  key={expense.id}
+                  className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors border border-transparent hover:border-primary/20 active:scale-[0.98]"
+                  onClick={() => onNavigate("expense-detail", groupId, expense.id)}
+                >
+                  {/* Foto de perfil del que pagó */}
+                  <div className="flex-shrink-0">
+                    {usersData[expense.paidBy]?.photoURL ? (
+                      <Image
+                        src={usersData[expense.paidBy].photoURL || "/placeholder.svg"}
+                        alt={getUserDisplayName(expense.paidBy, usersData)}
+                        width={40}
+                        height={40}
+                        className="h-9 w-9 sm:h-10 sm:w-10 rounded-full border-2 border-primary/20"
+                      />
+                    ) : (
+                      <div className="h-9 w-9 sm:h-10 sm:w-10 bg-primary/20 rounded-full flex items-center justify-center border-2 border-primary/20">
+                        <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Información del gasto */}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm sm:text-base text-primary truncate mb-1">
+                      {expense.description}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span className="truncate">
+                        {expense.createdAt?.toDate().toLocaleDateString("es-ES", {
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3 w-3" />
+                        {expense.participants?.length || group.members.length}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Monto */}
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-base sm:text-lg font-bold text-primary">${formatAmount(expense.amount)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      ${formatAmount(expense.amount / (expense.participants?.length || group.members.length))} c/u
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* CHAT DEL GRUPO - NUEVO */}
+      <GroupChat groupId={groupId} groupName={group.name} usersData={usersData} />
     </div>
   )
 }

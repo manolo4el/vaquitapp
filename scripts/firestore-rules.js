@@ -1,106 +1,172 @@
-// Reglas de Firestore para Vaquitapp
-// Ejecutar: node scripts/firestore-rules.js
+// Reglas completas de Firestore para Vaquitapp
+// Copia y pega estas reglas en Firebase Console > Firestore Database > Rules
 
 const firestoreRules = `
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Regla para usuarios - solo pueden leer/escribir su propio documento
+    // ========================================
+    // REGLAS PARA USUARIOS
+    // ========================================
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Regla para grupos - solo miembros pueden leer/escribir
-    match /groups/{groupId} {
-      allow read, write: if request.auth != null && 
-        request.auth.uid in resource.data.members;
-      allow create: if request.auth != null && 
-        request.auth.uid in request.resource.data.members;
-    }
-    
-    // Regla para gastos dentro de grupos - solo miembros del grupo
-    match /groups/{groupId}/expenses/{expenseId} {
-      allow read, write: if request.auth != null && 
-        request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
-      allow create: if request.auth != null && 
-        request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
-    }
-    
-    // Regla para transferencias dentro de grupos - solo miembros del grupo
-    match /groups/{groupId}/transfers/{transferId} {
-      allow read, write: if request.auth != null && 
-        request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
-      allow create: if request.auth != null && 
-        request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
-    }
-    
-    // Regla para mensajes de chat dentro de grupos - solo miembros del grupo
-    match /groups/{groupId}/messages/{messageId} {
-      allow read, write: if request.auth != null && 
-        request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
-      allow create: if request.auth != null && 
-        request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
-    }
-    
-    // Regla para notificaciones - solo el usuario propietario
-    match /notifications/{notificationId} {
-      allow read, write: if request.auth != null && 
-        request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null;
-    }
-    
-    // NUEVA: Regla para invitaciones - lectura pública, escritura solo para usuarios autenticados
-    match /invitations/{invitationId} {
-      // Cualquier usuario autenticado puede leer invitaciones (para validar y unirse)
+      // Leer: cualquier usuario autenticado puede leer perfiles de otros usuarios
       allow read: if request.auth != null;
       
-      // Solo usuarios autenticados pueden crear invitaciones
-      allow create: if request.auth != null && 
-        request.auth.uid == request.resource.data.createdBy;
-      
-      // Solo el creador puede actualizar la invitación (marcar como usada, desactivar)
-      allow update: if request.auth != null && 
-        (request.auth.uid == resource.data.createdBy || 
-         // Permitir que cualquier usuario autenticado marque la invitación como usada
-         (request.resource.data.keys().hasOnly(['usedBy']) && 
-          request.auth.uid in request.resource.data.usedBy));
-      
-      // Solo el creador puede eliminar la invitación
-      allow delete: if request.auth != null && 
-        request.auth.uid == resource.data.createdBy;
+      // Escribir: solo el propio usuario puede escribir/actualizar su perfil
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Regla por defecto - denegar todo lo demás
-    match /{document=**} {
-      allow read, write: if false;
+    // ========================================
+    // REGLAS PARA GRUPOS
+    // ========================================
+    match /groups/{groupId} {
+      // Leer: solo miembros del grupo pueden leer
+      allow read: if request.auth != null && 
+        request.auth.uid in resource.data.members;
+      
+      // Crear: el creador debe incluirse en los miembros
+      allow create: if request.auth != null && 
+        request.auth.uid in request.resource.data.members &&
+        request.resource.data.createdBy == request.auth.uid;
+      
+      // Actualizar: solo miembros pueden actualizar (para agregar nuevos miembros)
+      allow update: if request.auth != null && 
+        request.auth.uid in resource.data.members;
+      
+      // Eliminar: solo el creador puede eliminar el grupo
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.createdBy;
+      
+      // ========================================
+      // REGLAS PARA GASTOS DENTRO DE GRUPOS
+      // ========================================
+      match /expenses/{expenseId} {
+        // Leer: solo miembros del grupo
+        allow read: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+        
+        // Crear: solo miembros pueden crear gastos
+        allow create: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+        
+        // Actualizar: solo quien pagó puede actualizar el gasto
+        allow update: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
+          request.auth.uid == resource.data.paidBy;
+        
+        // Eliminar: solo quien pagó puede eliminar el gasto
+        allow delete: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
+          request.auth.uid == resource.data.paidBy;
+      }
+      
+      // ========================================
+      // REGLAS PARA TRANSFERENCIAS DENTRO DE GRUPOS
+      // ========================================
+      match /transfers/{transferId} {
+        // Leer: solo miembros del grupo
+        allow read: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+        
+        // Crear: solo quien debe pagar puede crear la transferencia
+        allow create: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
+          request.resource.data.from == request.auth.uid;
+        
+        // Actualizar: solo quien recibe o quien paga puede actualizar
+        allow update: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
+          (request.auth.uid == resource.data.to || request.auth.uid == resource.data.from);
+        
+        // Eliminar: solo quien creó puede eliminar
+        allow delete: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
+          request.auth.uid == resource.data.from;
+      }
+      
+      // ========================================
+      // REGLAS PARA MENSAJES DEL CHAT DENTRO DE GRUPOS
+      // ========================================
+      match /messages/{messageId} {
+        // Leer: solo miembros del grupo
+        allow read: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+        
+        // Crear: solo miembros pueden crear mensajes y deben ser el autor
+        allow create: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
+          request.resource.data.userId == request.auth.uid;
+        
+        // Actualizar: solo el autor puede actualizar su mensaje
+        allow update: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
+          request.auth.uid == resource.data.userId;
+        
+        // Eliminar: solo el autor puede eliminar su mensaje
+        allow delete: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
+          request.auth.uid == resource.data.userId;
+      }
+    }
+    
+    // ========================================
+    // REGLAS PARA NOTIFICACIONES
+    // ========================================
+    match /notifications/{notificationId} {
+      // Leer: solo el usuario destinatario puede leer sus notificaciones
+      allow read: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      
+      // Crear: cualquier usuario autenticado puede crear notificaciones para otros
+      // (esto permite que los triggers funcionen)
+      allow create: if request.auth != null;
+      
+      // Actualizar: solo el destinatario puede actualizar sus notificaciones
+      allow update: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      
+      // Eliminar: solo el destinatario puede eliminar sus notificaciones
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // ========================================
+    // REGLAS PARA INVITACIONES (si las usas)
+    // ========================================
+    match /invitations/{invitationId} {
+      // Leer: solo el invitado o quien invita
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.invitedUserId || 
+         request.auth.uid == resource.data.invitedBy);
+      
+      // Crear: cualquier usuario autenticado puede crear invitaciones
+      allow create: if request.auth != null && 
+        request.resource.data.invitedBy == request.auth.uid;
+      
+      // Actualizar: solo el invitado puede actualizar (aceptar/rechazar)
+      allow update: if request.auth != null && 
+        request.auth.uid == resource.data.invitedUserId;
+      
+      // Eliminar: solo quien invitó puede eliminar
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.invitedBy;
     }
   }
 }
 `
 
-console.log("=".repeat(80))
+console.log("=".repeat(60))
 console.log("REGLAS DE FIRESTORE PARA VAQUITAPP")
-console.log("=".repeat(80))
-console.log()
-console.log("📋 INSTRUCCIONES:")
-console.log("1. Ve a Firebase Console > Firestore Database > Rules")
-console.log("2. Copia y pega las siguientes reglas:")
-console.log("3. Haz clic en 'Publish' para aplicar los cambios")
-console.log()
-console.log("🔒 CARACTERÍSTICAS DE SEGURIDAD:")
-console.log("• Los usuarios solo pueden acceder a sus propios datos")
-console.log("• Solo miembros de grupos pueden ver gastos y transferencias")
-console.log("• Las notificaciones son privadas para cada usuario")
-console.log("• Las invitaciones pueden ser leídas por usuarios autenticados")
-console.log("• Solo el creador puede gestionar sus invitaciones")
-console.log()
-console.log("=".repeat(80))
-console.log("REGLAS DE FIRESTORE:")
-console.log("=".repeat(80))
-console.log()
+console.log("=".repeat(60))
 console.log(firestoreRules)
-console.log()
-console.log("=".repeat(80))
-console.log("✅ Copia las reglas de arriba y pégalas en Firebase Console")
-console.log("=".repeat(80))
+console.log("=".repeat(60))
+console.log("INSTRUCCIONES:")
+console.log("1. Ve a Firebase Console")
+console.log("2. Selecciona tu proyecto")
+console.log("3. Ve a Firestore Database > Rules")
+console.log("4. Copia y pega las reglas de arriba")
+console.log("5. Haz clic en 'Publicar'")
+console.log("=".repeat(60))
+
+export default firestoreRules

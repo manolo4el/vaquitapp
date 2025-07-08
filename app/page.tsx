@@ -21,30 +21,33 @@ import { NotificationsDropdown } from "@/components/notifications-dropdown"
 
 export default function Page() {
   const { user, userProfile, logout, loading, authError } = useAuth()
-  const { currentPage, selectedGroupId, selectedExpenseId, selectedInvitationId, navigateTo } = useNavigation()
+  const { currentPage, selectedGroupId, selectedExpenseId, navigateTo } = useNavigation()
   const { trackPageView, trackUserAction } = useAnalytics()
   const [loadingTimeout, setLoadingTimeout] = useState(false)
+  const [joinGroupId, setJoinGroupId] = useState<string | null>(null)
 
-  // Verificar si hay un parámetro de invitación en la URL
+  // Verificar si hay un parámetro de grupo en la URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
-    const invitationId = urlParams.get("invite")
-    if (invitationId && user && currentPage !== "group-join") {
-      navigateTo("group-join", invitationId)
+    const groupId = urlParams.get("join")
+    if (groupId && user && !joinGroupId) {
+      setJoinGroupId(groupId)
+      navigateTo("group-join", groupId)
     }
-  }, [user, navigateTo, currentPage])
+  }, [user, navigateTo, joinGroupId])
 
   // Limpiar el parámetro cuando se navega fuera de group-join
   useEffect(() => {
-    if (currentPage !== "group-join") {
+    if (currentPage !== "group-join" && joinGroupId) {
+      setJoinGroupId(null)
       // Limpiar la URL si no estamos en group-join
       const url = new URL(window.location.href)
-      if (url.searchParams.has("invite")) {
-        url.searchParams.delete("invite")
+      if (url.searchParams.has("join")) {
+        url.searchParams.delete("join")
         window.history.replaceState({}, "", url.toString())
       }
     }
-  }, [currentPage])
+  }, [currentPage, joinGroupId])
 
   // Timeout para detectar si el loading se cuelga
   useEffect(() => {
@@ -156,8 +159,8 @@ export default function Page() {
         return (
           <UserProfilePage
             onNavigate={navigateTo}
-            returnTo={selectedInvitationId ? `group-join` : undefined}
-            returnGroupId={selectedInvitationId}
+            returnTo={joinGroupId ? `group-join` : undefined}
+            returnGroupId={joinGroupId}
           />
         )
       case "group-details":
@@ -167,8 +170,8 @@ export default function Page() {
           <EnhancedDashboard onNavigate={navigateTo} />
         )
       case "group-join":
-        return selectedInvitationId ? (
-          <GroupJoinPage invitationId={selectedInvitationId} onNavigate={navigateTo} />
+        return selectedGroupId ? (
+          <GroupJoinPage groupId={selectedGroupId} onNavigate={navigateTo} />
         ) : (
           <EnhancedDashboard onNavigate={navigateTo} />
         )
