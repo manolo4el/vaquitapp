@@ -18,6 +18,7 @@ import { DebtConsolidationPage } from "@/components/debt-consolidation-page"
 import { ExpenseDetailPage } from "@/components/expense-detail-page"
 import { useAnalytics } from "@/hooks/use-analytics"
 import { NotificationsDropdown } from "@/components/notifications-dropdown"
+<link rel="manifest" href="/manifest.json" />
 
 export default function Page() {
   const { user, userProfile, logout, loading, authError } = useAuth()
