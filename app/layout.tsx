@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import ClientLayout from "./ClientLayout"
 
+<link rel="manifest" href="/manifest.json" />
+
 export const metadata: Metadata = {
   title: "Vaquitapp - Divide gastos entre amigos",
   description: "Aplicación para dividir gastos entre amigos de forma fácil y eficiente",
