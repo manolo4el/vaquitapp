@@ -158,6 +158,7 @@ export function UserProfilePage({ onNavigate, returnTo, returnGroupId }: UserPro
               value={paymentInfo}
               onChange={(e) => setPaymentInfo(e.target.value)}
               className="border-primary/20 focus:border-primary h-12"
+              maxLength={22}
             />
             <p className="text-xs text-muted-foreground">
               Ingresa tu CBU (22 dígitos), CVU (22 dígitos) o ALIAS de Mercado Pago/banco
