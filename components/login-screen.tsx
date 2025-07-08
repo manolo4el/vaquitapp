@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { LogIn, Loader2 } from "lucide-react"
 import Image from "next/image"
+<link rel="manifest" href="/manifest.json" />
 
 export function LoginScreen() {
   const { login } = useAuth()
