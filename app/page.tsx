@@ -24,30 +24,30 @@ export default function Page() {
   const { currentPage, selectedGroupId, selectedExpenseId, navigateTo } = useNavigation()
   const { trackPageView, trackUserAction } = useAnalytics()
   const [loadingTimeout, setLoadingTimeout] = useState(false)
-  const [joinGroupId, setJoinGroupId] = useState<string | null>(null)
+  const [joinInvitationId, setJoinInvitationId] = useState<string | null>(null)
 
-  // Verificar si hay un parámetro de grupo en la URL
+  // Verificar si hay un parámetro de invitación en la URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
-    const groupId = urlParams.get("join")
-    if (groupId && user && !joinGroupId) {
-      setJoinGroupId(groupId)
-      navigateTo("group-join", groupId)
+    const invitationId = urlParams.get("invite")
+    if (invitationId && user && !joinInvitationId) {
+      setJoinInvitationId(invitationId)
+      navigateTo("group-join", invitationId)
     }
-  }, [user, navigateTo, joinGroupId])
+  }, [user, navigateTo, joinInvitationId])
 
   // Limpiar el parámetro cuando se navega fuera de group-join
   useEffect(() => {
-    if (currentPage !== "group-join" && joinGroupId) {
-      setJoinGroupId(null)
+    if (currentPage !== "group-join" && joinInvitationId) {
+      setJoinInvitationId(null)
       // Limpiar la URL si no estamos en group-join
       const url = new URL(window.location.href)
-      if (url.searchParams.has("join")) {
-        url.searchParams.delete("join")
+      if (url.searchParams.has("invite")) {
+        url.searchParams.delete("invite")
         window.history.replaceState({}, "", url.toString())
       }
     }
-  }, [currentPage, joinGroupId])
+  }, [currentPage, joinInvitationId])
 
   // Timeout para detectar si el loading se cuelga
   useEffect(() => {
@@ -130,134 +130,111 @@ export default function Page() {
   // Si no hay usuario, mostrar login
   if (!user) {
     return (
-      <>
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
         <LoginScreen />
         <Toaster />
-      </>
+      </div>
     )
   }
 
-  // Si hay error de permisos (usuario logueado pero sin acceso a Firestore)
-  if (user && !userProfile && authError?.includes("permission")) {
+  // Si hay error de autenticación, mostrar instrucciones de Firebase
+  if (authError) {
     return (
-      <>
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
         <FirebaseSetupInstructions />
         <Toaster />
-      </>
+      </div>
     )
   }
 
-  const renderCurrentPage = () => {
+  // Header común para páginas autenticadas
+  const renderHeader = () => {
+    if (currentPage === "dashboard") {
+      return (
+        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/40">
+          <div className="container mx-auto px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Image src="/cow-logo.svg" alt="Vaquitapp" width={32} height={32} className="opacity-80" />
+                <div>
+                  <h1 className="text-lg font-bold text-primary">Vaquitapp</h1>
+                  <p className="text-xs text-muted-foreground">Tu rebaño financiero</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <NotificationsDropdown />
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigateTo("profile")}
+                  className="hover:bg-primary/10"
+                >
+                  {userProfile?.photoURL ? (
+                    <Image
+                      src={userProfile.photoURL || "/placeholder.svg"}
+                      alt="Profile"
+                      width={24}
+                      height={24}
+                      className="rounded-full"
+                    />
+                  ) : (
+                    <User className="h-4 w-4" />
+                  )}
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={logout}
+                  className="hover:bg-destructive/10 text-destructive"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </header>
+      )
+    }
+    return null
+  }
+
+  // Renderizar contenido según la página actual
+  const renderContent = () => {
     switch (currentPage) {
+      case "dashboard":
+        return <EnhancedDashboard onNavigateToGroup={handleNavigateToGroup} />
+
       case "add-expense":
-        return selectedGroupId ? (
-          <AddExpensePage groupId={selectedGroupId} onNavigate={navigateTo} />
-        ) : (
-          <EnhancedDashboard onNavigate={navigateTo} />
-        )
+        return <AddExpensePage groupId={selectedGroupId!} onNavigate={navigateTo} />
+
       case "profile":
-        return (
-          <UserProfilePage
-            onNavigate={navigateTo}
-            returnTo={joinGroupId ? `group-join` : undefined}
-            returnGroupId={joinGroupId}
-          />
-        )
+        return <UserProfilePage onNavigate={navigateTo} />
+
       case "group-details":
-        return selectedGroupId ? (
-          <GroupDetailsPage groupId={selectedGroupId} onNavigate={navigateTo} />
-        ) : (
-          <EnhancedDashboard onNavigate={navigateTo} />
-        )
+        return <GroupDetailsPage groupId={selectedGroupId!} onNavigate={navigateTo} />
+
       case "group-join":
-        return selectedGroupId ? (
-          <GroupJoinPage groupId={selectedGroupId} onNavigate={navigateTo} />
-        ) : (
-          <EnhancedDashboard onNavigate={navigateTo} />
-        )
+        return <GroupJoinPage invitationId={joinInvitationId!} onNavigate={navigateTo} />
+
       case "debt-consolidation":
         return <DebtConsolidationPage onNavigate={navigateTo} />
+
       case "expense-detail":
-        return selectedGroupId && selectedExpenseId ? (
-          <ExpenseDetailPage groupId={selectedGroupId} expenseId={selectedExpenseId} onNavigate={navigateTo} />
-        ) : (
-          <EnhancedDashboard onNavigate={navigateTo} />
-        )
+        return <ExpenseDetailPage groupId={selectedGroupId!} expenseId={selectedExpenseId!} onNavigate={navigateTo} />
+
       default:
-        return <EnhancedDashboard onNavigate={navigateTo} />
+        return <EnhancedDashboard onNavigateToGroup={handleNavigateToGroup} />
     }
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
+      {renderHeader()}
+      <main className="container mx-auto px-4 py-6 max-w-4xl">{renderContent()}</main>
       <Toaster />
-
-      {/* Header */}
-      <header className="bg-card/80 backdrop-blur-sm shadow-lg border-b border-primary/10 sticky top-0 z-30">
-        <div className="max-w-md mx-auto px-4">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-gradient-to-br from-primary to-primary/80 rounded-xl">
-                <Image
-                  src="/cow-logo.svg"
-                  alt="Vaquitapp"
-                  width={24}
-                  height={24}
-                  className="filter brightness-0 invert"
-                />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  Vaquitapp
-                </h1>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              {/* Botón de Perfil */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigateTo("profile")}
-                className={`h-8 px-2 ${
-                  currentPage === "profile" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-primary"
-                }`}
-              >
-                <User className="h-4 w-4 mr-1" />
-                <span className="text-xs">Perfil</span>
-              </Button>
-
-              {/* Dropdown de Notificaciones */}
-              <NotificationsDropdown onNavigateToGroup={handleNavigateToGroup} />
-
-              {/* Indicador de perfil incompleto */}
-              {!userProfile?.paymentInfo && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigateTo("profile")}
-                  className="border-destructive/30 text-destructive hover:bg-destructive/10 text-xs h-8"
-                >
-                  ⚠️
-                </Button>
-              )}
-
-              {/* Botón de Salir */}
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={logout}
-                className="border-primary/20 hover:bg-primary/10 h-8 w-8 bg-transparent"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main content */}
-      <main className="max-w-md mx-auto px-4 py-6">{renderCurrentPage()}</main>
     </div>
   )
 }
