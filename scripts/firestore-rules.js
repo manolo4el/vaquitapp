@@ -21,18 +21,16 @@ service cloud.firestore {
     // REGLAS PARA GRUPOS
     // ========================================
     match /groups/{groupId} {
-      // Leer: solo miembros del grupo pueden leer
-      allow read: if request.auth != null && 
-        request.auth.uid in resource.data.members;
+      // Leer: cualquier usuario autenticado puede leer (para permitir acceso con link de invitación)
+      allow read: if request.auth != null;
       
       // Crear: el creador debe incluirse en los miembros
       allow create: if request.auth != null && 
         request.auth.uid in request.resource.data.members &&
         request.resource.data.createdBy == request.auth.uid;
       
-      // Actualizar: solo miembros pueden actualizar (para agregar nuevos miembros)
-      allow update: if request.auth != null && 
-        request.auth.uid in resource.data.members;
+      // Actualizar: cualquier usuario autenticado puede actualizar (para unirse al grupo)
+      allow update: if request.auth != null;
       
       // Eliminar: solo el creador puede eliminar el grupo
       allow delete: if request.auth != null && 
@@ -42,22 +40,18 @@ service cloud.firestore {
       // REGLAS PARA GASTOS DENTRO DE GRUPOS
       // ========================================
       match /expenses/{expenseId} {
-        // Leer: solo miembros del grupo
-        allow read: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+        // Leer: cualquier usuario autenticado puede leer gastos
+        allow read: if request.auth != null;
         
-        // Crear: solo miembros pueden crear gastos
-        allow create: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+        // Crear: cualquier usuario autenticado puede crear gastos
+        allow create: if request.auth != null;
         
         // Actualizar: solo quien pagó puede actualizar el gasto
         allow update: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
           request.auth.uid == resource.data.paidBy;
         
         // Eliminar: solo quien pagó puede eliminar el gasto
         allow delete: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
           request.auth.uid == resource.data.paidBy;
       }
       
@@ -65,23 +59,17 @@ service cloud.firestore {
       // REGLAS PARA TRANSFERENCIAS DENTRO DE GRUPOS
       // ========================================
       match /transfers/{transferId} {
-        // Leer: solo miembros del grupo
-        allow read: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+        // Leer: cualquier usuario autenticado puede leer transferencias
+        allow read: if request.auth != null;
         
-        // Crear: solo quien debe pagar puede crear la transferencia
-        allow create: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
-          request.resource.data.from == request.auth.uid;
+        // Crear: cualquier usuario autenticado puede crear transferencias
+        allow create: if request.auth != null;
         
-        // Actualizar: solo quien recibe o quien paga puede actualizar
-        allow update: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
-          (request.auth.uid == resource.data.to || request.auth.uid == resource.data.from);
+        // Actualizar: cualquier usuario autenticado puede actualizar transferencias
+        allow update: if request.auth != null;
         
         // Eliminar: solo quien creó puede eliminar
         allow delete: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
           request.auth.uid == resource.data.from;
       }
       
@@ -89,23 +77,19 @@ service cloud.firestore {
       // REGLAS PARA MENSAJES DEL CHAT DENTRO DE GRUPOS
       // ========================================
       match /messages/{messageId} {
-        // Leer: solo miembros del grupo
-        allow read: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+        // Leer: cualquier usuario autenticado puede leer mensajes
+        allow read: if request.auth != null;
         
-        // Crear: solo miembros pueden crear mensajes y deben ser el autor
+        // Crear: cualquier usuario autenticado puede crear mensajes y deben ser el autor
         allow create: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
           request.resource.data.userId == request.auth.uid;
         
         // Actualizar: solo el autor puede actualizar su mensaje
         allow update: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
           request.auth.uid == resource.data.userId;
         
         // Eliminar: solo el autor puede eliminar su mensaje
         allow delete: if request.auth != null && 
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members &&
           request.auth.uid == resource.data.userId;
       }
     }
@@ -157,9 +141,16 @@ service cloud.firestore {
 `
 
 console.log("=".repeat(60))
-console.log("REGLAS DE FIRESTORE PARA VAQUITAPP")
+console.log("REGLAS DE FIRESTORE PARA VAQUITAPP - ACTUALIZADAS")
 console.log("=".repeat(60))
 console.log(firestoreRules)
+console.log("=".repeat(60))
+console.log("CAMBIOS REALIZADOS:")
+console.log("✅ Cualquier usuario autenticado puede leer grupos")
+console.log("✅ Cualquier usuario autenticado puede actualizar grupos (unirse)")
+console.log("✅ Cualquier usuario autenticado puede leer/crear gastos")
+console.log("✅ Cualquier usuario autenticado puede leer/crear/actualizar transferencias")
+console.log("✅ Cualquier usuario autenticado puede leer mensajes del chat")
 console.log("=".repeat(60))
 console.log("INSTRUCCIONES:")
 console.log("1. Ve a Firebase Console")
