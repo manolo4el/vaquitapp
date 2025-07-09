@@ -9,11 +9,20 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Headers para PWA - críticos para PWABuilder
-  async headers() {
+  // Reescribir para servir el manifest desde la API si el archivo estático falla
+  async rewrites() {
     return [
       {
         source: '/manifest.json',
+        destination: '/api/manifest',
+      },
+    ]
+  },
+  // Headers para PWA
+  async headers() {
+    return [
+      {
+        source: '/api/manifest',
         headers: [
           {
             key: 'Content-Type',
@@ -56,6 +65,10 @@ const nextConfig = {
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
           },
         ],
       },
