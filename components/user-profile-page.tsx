@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/auth-context"
-import { ArrowLeft, Save, User, CreditCard, Mail } from "lucide-react"
+import { ArrowLeft, Save, User, CreditCard, Mail, Sun, Moon } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { useTheme } from "next-themes"
 
 interface UserProfilePageProps {
   onNavigate: (page: string, groupId?: string) => void
@@ -17,6 +18,7 @@ interface UserProfilePageProps {
 
 export function UserProfilePage({ onNavigate, returnTo, returnGroupId }: UserProfilePageProps) {
   const { user, userProfile, updatePaymentInfo } = useAuth()
+  const { theme, setTheme } = useTheme()
   const [paymentInfo, setPaymentInfo] = useState(userProfile?.paymentInfo || "")
   const [loading, setLoading] = useState(false)
 
@@ -53,6 +55,14 @@ export function UserProfilePage({ onNavigate, returnTo, returnGroupId }: UserPro
     } finally {
       setLoading(false)
     }
+  }
+
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark")
+    toast({
+      title: "Tema actualizado",
+      description: `Cambiado a modo ${theme === "dark" ? "claro" : "oscuro"} 🎨`,
+    })
   }
 
   return (
@@ -120,6 +130,42 @@ export function UserProfilePage({ onNavigate, returnTo, returnGroupId }: UserPro
               <Label className="text-primary font-medium">Email</Label>
               <Input value={user?.email || ""} disabled className="bg-muted/50 border-muted" />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Configuración de apariencia */}
+      <Card className="border-0 shadow-xl bg-gradient-to-br from-card to-primary/5">
+        <CardHeader>
+          <CardTitle className="text-xl text-primary flex items-center gap-2">
+            {theme === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+            Apariencia
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-muted/30 to-secondary/20 rounded-xl">
+            <div className="flex-1">
+              <h4 className="font-semibold text-primary mb-1">Tema de la aplicación</h4>
+              <p className="text-sm text-muted-foreground">Cambia entre modo claro y oscuro según tu preferencia</p>
+            </div>
+            <Button
+              onClick={toggleTheme}
+              variant="outline"
+              size="lg"
+              className="ml-4 border-primary/20 hover:bg-primary/10 bg-transparent"
+            >
+              {theme === "dark" ? (
+                <>
+                  <Sun className="h-4 w-4 mr-2" />
+                  Modo Claro
+                </>
+              ) : (
+                <>
+                  <Moon className="h-4 w-4 mr-2" />
+                  Modo Oscuro
+                </>
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>
