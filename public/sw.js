@@ -1,13 +1,8 @@
 const CACHE_NAME = "vaquitapp-v1"
-const urlsToCache = ["/", "/public/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/cow-logo.svg"]
+const urlsToCache = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"]
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("Opened cache")
-      return cache.addAll(urlsToCache)
-    }),
-  )
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache)))
 })
 
 self.addEventListener("fetch", (event) => {

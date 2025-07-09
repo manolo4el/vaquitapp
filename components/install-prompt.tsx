@@ -3,15 +3,11 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Download, X } from "lucide-react"
+import { X, Download } from "lucide-react"
 
 interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: string[]
-  readonly userChoice: Promise<{
-    outcome: "accepted" | "dismissed"
-    platform: string
-  }>
   prompt(): Promise<void>
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
 }
 
 export function InstallPrompt() {
@@ -53,22 +49,31 @@ export function InstallPrompt() {
   }
 
   return (
-    <Card className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-sm">
-      <CardContent className="flex items-center gap-3 p-4">
-        <Download className="h-6 w-6 text-green-600" />
-        <div className="flex-1">
-          <p className="text-sm font-medium">Instalar Vaquitapp</p>
-          <p className="text-xs text-muted-foreground">Accede más rápido desde tu pantalla de inicio</p>
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" onClick={handleInstall}>
-            Instalar
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleDismiss}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-4 md:w-80">
+      <Card className="shadow-lg">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Download className="h-5 w-5 text-emerald-600" />
+              <h3 className="font-semibold text-sm">Instalar Vaquitapp</h3>
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleDismiss} className="h-6 w-6 p-0">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground mb-3">
+            Instala la app para un acceso más rápido y una mejor experiencia.
+          </p>
+          <div className="flex gap-2">
+            <Button onClick={handleInstall} size="sm" className="flex-1">
+              Instalar
+            </Button>
+            <Button onClick={handleDismiss} variant="outline" size="sm">
+              Ahora no
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
