@@ -146,6 +146,99 @@ self.addEventListener("sync", (event) => {
   }
 })
 
+// Push notifications event
+self.addEventListener("push", (event) => {
+  console.log("Push notification received:", event)
+
+  let notificationData = {
+    title: "Vaquitapp",
+    body: "Tienes nuevas actualizaciones",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: "vaquitapp-notification",
+    requireInteraction: false,
+    actions: [
+      {
+        action: "view",
+        title: "Ver",
+        icon: "/icons/icon-192.png",
+      },
+      {
+        action: "dismiss",
+        title: "Cerrar",
+      },
+    ],
+    data: {
+      url: "/",
+      timestamp: Date.now(),
+    },
+  }
+
+  // Si hay datos en el push, usarlos
+  if (event.data) {
+    try {
+      const pushData = event.data.json()
+      notificationData = {
+        ...notificationData,
+        ...pushData,
+        data: {
+          ...notificationData.data,
+          ...pushData.data,
+        },
+      }
+    } catch (error) {
+      console.error("Error parsing push data:", error)
+    }
+  }
+
+  event.waitUntil(
+    self.registration
+      .showNotification(notificationData.title, notificationData)
+      .then(() => {
+        console.log("Notification shown successfully")
+      })
+      .catch((error) => {
+        console.error("Error showing notification:", error)
+      }),
+  )
+})
+
+// Notification click event
+self.addEventListener("notificationclick", (event) => {
+  console.log("Notification clicked:", event)
+
+  event.notification.close()
+
+  if (event.action === "view" || !event.action) {
+    // Abrir la app o navegar a una URL específica
+    const urlToOpen = event.notification.data?.url || "/"
+
+    event.waitUntil(
+      clients
+        .matchAll({
+          type: "window",
+          includeUncontrolled: true,
+        })
+        .then((clientList) => {
+          // Si ya hay una ventana abierta, enfocarla
+          for (const client of clientList) {
+            if (client.url.includes(urlToOpen) && "focus" in client) {
+              return client.focus()
+            }
+          }
+
+          // Si no hay ventana abierta, abrir una nueva
+          if (clients.openWindow) {
+            return clients.openWindow(urlToOpen)
+          }
+        }),
+    )
+  } else if (event.action === "dismiss") {
+    // Solo cerrar la notificación (ya se cerró arriba)
+    console.log("Notification dismissed")
+  }
+})
+
 // Función para sincronizar gastos
 async function syncExpenses() {
   try {
@@ -185,6 +278,16 @@ async function syncExpenses() {
         })
       })
     })
+
+    // Mostrar notificación de sincronización completada
+    if (pendingActions.length > 0) {
+      await self.registration.showNotification("Sincronización completada", {
+        body: `${pendingActions.length} gastos sincronizados correctamente`,
+        icon: "/icons/icon-192.png",
+        tag: "sync-complete",
+        requireInteraction: false,
+      })
+    }
   } catch (error) {
     console.error("Error in expense sync:", error)
     throw error
@@ -225,6 +328,14 @@ async function syncGroups() {
         })
       })
     })
+
+    if (pendingActions.length > 0) {
+      await self.registration.showNotification("Grupos sincronizados", {
+        body: `${pendingActions.length} grupos actualizados`,
+        icon: "/icons/icon-192.png",
+        tag: "sync-complete",
+      })
+    }
   } catch (error) {
     console.error("Error in group sync:", error)
     throw error
@@ -280,6 +391,11 @@ async function getPendingActions(type) {
 
     request.onsuccess = () => {
       const db = request.result
+      if (!db.objectStoreNames.contains("pendingActions")) {
+        resolve([])
+        return
+      }
+
       const transaction = db.transaction(["pendingActions"], "readonly")
       const store = transaction.objectStore("pendingActions")
       const index = store.index("type")
