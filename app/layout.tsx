@@ -35,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <head>
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="manifest" href="/public/manifest.json" />
         <meta name="theme-color" content="#22c55e" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -52,7 +52,7 @@ export default function RootLayout({
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js')
+                  navigator.serviceWorker.register('/public/sw.js')
                     .then(function(registration) {
                       console.log('SW registered: ', registration);
                     })
