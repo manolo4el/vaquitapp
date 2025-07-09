@@ -9,6 +9,7 @@
   "orientation": "portrait",
   "scope": "/",
   "lang": "es",
+  "dir": "ltr",
   "categories": ["finance", "utilities"],
   "icons": [
     {
@@ -37,5 +38,6 @@
     }
   ],
   "id": "/",
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "related_applications": []
 }

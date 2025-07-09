@@ -9,7 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Headers para PWA
+  // Headers para PWA - críticos para PWABuilder
   async headers() {
     return [
       {
@@ -18,6 +18,10 @@ const nextConfig = {
           {
             key: 'Content-Type',
             value: 'application/manifest+json',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
           },
           {
             key: 'Cache-Control',
@@ -33,12 +37,25 @@ const nextConfig = {
             value: 'application/javascript; charset=utf-8',
           },
           {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
             key: 'Cache-Control',
             value: 'no-cache, no-store, must-revalidate',
           },
+        ],
+      },
+      {
+        source: '/icons/:path*',
+        headers: [
           {
-            key: 'Service-Worker-Allowed',
-            value: '/',
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
           },
         ],
       },
