@@ -9,10 +9,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Optimizaciones para PWA
-  experimental: {
-    webpackBuildWorker: true,
-  },
   // Headers para PWA
   async headers() {
     return [
@@ -23,6 +19,10 @@ const nextConfig = {
             key: 'Content-Type',
             value: 'application/manifest+json',
           },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
         ],
       },
       {
@@ -30,11 +30,15 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Type',
-            value: 'application/javascript',
+            value: 'application/javascript; charset=utf-8',
           },
           {
             key: 'Service-Worker-Allowed',
             value: '/',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
           },
         ],
       },

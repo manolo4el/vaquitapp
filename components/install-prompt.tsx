@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Download, X } from "lucide-react"
+import { X, Download } from "lucide-react"
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -12,13 +12,13 @@ interface BeforeInstallPromptEvent extends Event {
 
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false)
+  const [showPrompt, setShowPrompt] = useState(false)
 
   useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e as BeforeInstallPromptEvent)
-      setShowInstallPrompt(true)
+      setShowPrompt(true)
     }
 
     window.addEventListener("beforeinstallprompt", handler)
@@ -36,16 +36,15 @@ export function InstallPrompt() {
 
     if (outcome === "accepted") {
       setDeferredPrompt(null)
-      setShowInstallPrompt(false)
+      setShowPrompt(false)
     }
   }
 
   const handleDismiss = () => {
-    setShowInstallPrompt(false)
-    setDeferredPrompt(null)
+    setShowPrompt(false)
   }
 
-  if (!showInstallPrompt || !deferredPrompt) {
+  if (!showPrompt || !deferredPrompt) {
     return null
   }
 
@@ -57,12 +56,12 @@ export function InstallPrompt() {
           <p className="text-xs text-muted-foreground">Instala la app para un acceso más rápido</p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" onClick={handleInstall} className="h-8 px-3">
-            <Download className="h-4 w-4 mr-1" />
+          <Button size="sm" onClick={handleInstall} className="h-8">
+            <Download className="h-3 w-3 mr-1" />
             Instalar
           </Button>
           <Button size="sm" variant="ghost" onClick={handleDismiss} className="h-8 w-8 p-0">
-            <X className="h-4 w-4" />
+            <X className="h-3 w-3" />
           </Button>
         </div>
       </CardContent>

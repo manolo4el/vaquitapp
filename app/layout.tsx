@@ -15,11 +15,19 @@ export const metadata: Metadata = {
   generator: "v0.dev",
   manifest: "/manifest.json",
   themeColor: "#22c55e",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Vaquitapp",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 }
 
@@ -29,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es">
+    <>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#22c55e" />
@@ -37,13 +45,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Vaquitapp" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
         <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
-      </head>
-      <body>
-        <ClientLayout>{children}</ClientLayout>
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -61,7 +65,8 @@ export default function RootLayout({
             `,
           }}
         />
-      </body>
-    </html>
+      </head>
+      <ClientLayout>{children}</ClientLayout>
+    </>
   )
 }
