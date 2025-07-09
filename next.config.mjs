@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
+  swcMinify: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -16,11 +18,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Type',
-            value: 'application/json',
-          },
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=0, must-revalidate',
+            value: 'application/manifest+json',
           },
         ],
       },
@@ -34,6 +32,19 @@ const nextConfig = {
           {
             key: 'Cache-Control',
             value: 'no-cache, no-store, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+        ],
+      },
+      {
+        source: '/icons/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
           },
         ],
       },

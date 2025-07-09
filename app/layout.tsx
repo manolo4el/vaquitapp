@@ -1,18 +1,14 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/toaster"
 import ClientLayout from "./ClientLayout"
-
-const inter = Inter({ subsets: ["latin"] })
+import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Vaquitapp - Divide gastos fácilmente",
-  description: "Aplicación para dividir gastos entre amigos de manera sencilla",
+  title: "Vaquitapp - Divide gastos entre amigos",
+  description:
+    "Vaquitapp 🐮 te ayuda a dividir los gastos entre amigos de forma simple, informal y rápida. Ideal para juntadas, viajes y todo lo que implique compartir gastos.",
   manifest: "/manifest.json",
-  themeColor: "#10b981",
+  themeColor: "#22c55e",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
   appleWebApp: {
     capable: true,
@@ -26,7 +22,7 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
   },
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -35,21 +31,29 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es">
       <head>
+        {/* PWA Meta Tags */}
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#10b981" />
+        <meta name="theme-color" content="#22c55e" />
+        <meta name="background-color" content="#ffffff" />
+
+        {/* Mobile Meta Tags */}
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Vaquitapp" />
-        <meta name="mobile-web-app-capable" content="yes" />
+
+        {/* Icons */}
+        <link rel="icon" href="/icons/icon-192.png" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
+
+        {/* Viewport */}
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-      </head>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <ClientLayout>{children}</ClientLayout>
-          <Toaster />
-        </ThemeProvider>
+
+        {/* Service Worker Registration */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -67,6 +71,9 @@ export default function RootLayout({
             `,
           }}
         />
+      </head>
+      <body>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )
