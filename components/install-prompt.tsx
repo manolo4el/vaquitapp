@@ -3,11 +3,15 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { X, Download } from "lucide-react"
+import { Download, X } from "lucide-react"
 
 interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[]
+  readonly userChoice: Promise<{
+    outcome: "accepted" | "dismissed"
+    platform: string
+  }>
   prompt(): Promise<void>
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
 }
 
 export function InstallPrompt() {
@@ -51,17 +55,17 @@ export function InstallPrompt() {
   return (
     <Card className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-sm">
       <CardContent className="flex items-center gap-3 p-4">
+        <Download className="h-6 w-6 text-green-600" />
         <div className="flex-1">
-          <h3 className="font-semibold text-sm">Instalar Vaquitapp</h3>
-          <p className="text-xs text-muted-foreground">Instala la app para un acceso más rápido</p>
+          <p className="text-sm font-medium">Instalar Vaquitapp</p>
+          <p className="text-xs text-muted-foreground">Accede más rápido desde tu pantalla de inicio</p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" onClick={handleInstall} className="h-8">
-            <Download className="h-3 w-3 mr-1" />
+          <Button size="sm" onClick={handleInstall}>
             Instalar
           </Button>
-          <Button size="sm" variant="ghost" onClick={handleDismiss} className="h-8 w-8 p-0">
-            <X className="h-3 w-3" />
+          <Button size="sm" variant="ghost" onClick={handleDismiss}>
+            <X className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>

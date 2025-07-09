@@ -13,7 +13,6 @@ export const metadata: Metadata = {
     apple: "/icons/icon-192.png",
   },
   generator: "v0.dev",
-  manifest: "/manifest.json",
   themeColor: "#22c55e",
   viewport: {
     width: "device-width",
@@ -26,9 +25,6 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Vaquitapp",
   },
-  other: {
-    "mobile-web-app-capable": "yes",
-  },
 }
 
 export default function RootLayout({
@@ -37,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <>
+    <html lang="es">
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#22c55e" />
@@ -48,6 +44,9 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
         <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
+      </head>
+      <body>
+        <ClientLayout>{children}</ClientLayout>
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -65,8 +64,7 @@ export default function RootLayout({
             `,
           }}
         />
-      </head>
-      <ClientLayout>{children}</ClientLayout>
-    </>
+      </body>
+    </html>
   )
 }
