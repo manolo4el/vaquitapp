@@ -36,18 +36,6 @@
       "purpose": "maskable"
     }
   ],
-  "shortcuts": [
-    {
-      "name": "Crear grupo",
-      "short_name": "Nuevo grupo",
-      "description": "Crear un nuevo grupo para dividir gastos",
-      "url": "/",
-      "icons": [
-        {
-          "src": "/icons/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
-    }
-  ]
+  "id": "/",
+  "prefer_related_applications": false
 }

@@ -5,8 +5,12 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Vaquitapp - Divide gastos entre amigos",
-  description:
-    "Vaquitapp 🐮 te ayuda a dividir los gastos entre amigos de forma simple, informal y rápida. Ideal para juntadas, viajes y todo lo que implique compartir gastos.",
+  description: "Aplicación para dividir gastos entre amigos de forma fácil y eficiente",
+  icons: {
+    icon: "/icons/icon-192.png",
+    shortcut: "/icons/icon-192.png",
+    apple: "/icons/icon-192.png",
+  },
   manifest: "/manifest.json",
   themeColor: "#22c55e",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
@@ -14,13 +18,6 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "Vaquitapp",
-  },
-  icons: {
-    icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
   },
   generator: "v0.dev",
 }
@@ -33,27 +30,20 @@ export default function RootLayout({
   return (
     <html lang="es">
       <head>
-        {/* PWA Meta Tags */}
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#22c55e" />
-        <meta name="background-color" content="#ffffff" />
-
-        {/* Mobile Meta Tags */}
-        <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="icon" href="/icons/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Vaquitapp" />
-
-        {/* Icons */}
-        <link rel="icon" href="/icons/icon-192.png" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
         <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
-
-        {/* Viewport */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-
-        {/* Service Worker Registration */}
+      </head>
+      <body>
+        <ClientLayout>{children}</ClientLayout>
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -71,9 +61,6 @@ export default function RootLayout({
             `,
           }}
         />
-      </head>
-      <body>
-        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )

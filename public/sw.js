@@ -1,28 +1,21 @@
 const CACHE_NAME = "vaquitapp-v1"
-const urlsToCache = [
-  "/",
-  "/static/js/bundle.js",
-  "/static/css/main.css",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-  "/cow-logo.svg",
-]
+const urlsToCache = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/cow-logo.svg"]
 
-// Install event
+// Instalar el service worker
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log("Opened cache")
+      console.log("Cache abierto")
       return cache.addAll(urlsToCache)
     }),
   )
 })
 
-// Fetch event
+// Interceptar las peticiones de red
 self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(event.request).then((response) => {
-      // Cache hit - return response
+      // Cache hit - devolver respuesta
       if (response) {
         return response
       }
@@ -31,7 +24,7 @@ self.addEventListener("fetch", (event) => {
   )
 })
 
-// Activate event
+// Activar el service worker
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) =>
@@ -44,15 +37,4 @@ self.addEventListener("activate", (event) => {
       ),
     ),
   )
-})
-
-// Push notification event (opcional para futuras funcionalidades)
-self.addEventListener("push", (event) => {
-  const options = {
-    body: event.data ? event.data.text() : "Nueva notificación de Vaquitapp",
-    icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
-  }
-
-  event.waitUntil(self.registration.showNotification("Vaquitapp", options))
 })
