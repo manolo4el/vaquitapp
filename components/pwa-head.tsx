@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 
-export default function PWAHead() {
+export function PWAHead() {
   useEffect(() => {
     // Asegurar que el manifest link esté presente
     if (!document.querySelector('link[rel="manifest"]')) {
@@ -36,3 +36,6 @@ export default function PWAHead() {
 
   return null
 }
+
+// Export por defecto también para compatibilidad
+export default PWAHead

@@ -1,55 +1,100 @@
 const CACHE_NAME = "vaquitapp-v1"
-const urlsToCache = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/cow-logo.svg"]
+const STATIC_CACHE_NAME = "vaquitapp-static-v1"
 
-// Install event
+// Archivos estáticos para cachear
+const STATIC_FILES = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/cow-logo.svg"]
+
+// URLs de API para cachear dinámicamente
+const API_CACHE_PATTERNS = [/^https:\/\/.*\.googleapis\.com/, /^https:\/\/.*\.firebaseapp\.com/, /\/api\//]
+
+// Install event - cachear archivos estáticos
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache)))
-  self.skipWaiting()
-})
-
-// Activate event
-self.addEventListener("activate", (event) => {
+  console.log("Service Worker installing...")
   event.waitUntil(
-    caches.keys().then((cacheNames) =>
-      Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName)
-          }
-        }),
-      ),
-    ),
+    caches
+      .open(STATIC_CACHE_NAME)
+      .then((cache) => {
+        console.log("Caching static files")
+        return cache.addAll(STATIC_FILES)
+      })
+      .then(() => {
+        console.log("Static files cached successfully")
+        return self.skipWaiting()
+      })
+      .catch((error) => {
+        console.error("Error caching static files:", error)
+      }),
   )
-  self.clients.claim()
 })
 
-// Fetch event with offline support
+// Activate event - limpiar caches antiguos
+self.addEventListener("activate", (event) => {
+  console.log("Service Worker activating...")
+  event.waitUntil(
+    caches
+      .keys()
+      .then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== CACHE_NAME && cacheName !== STATIC_CACHE_NAME) {
+              console.log("Deleting old cache:", cacheName)
+              return caches.delete(cacheName)
+            }
+          }),
+        )
+      })
+      .then(() => {
+        console.log("Service Worker activated")
+        return self.clients.claim()
+      }),
+  )
+})
+
+// Fetch event - estrategia de cache
 self.addEventListener("fetch", (event) => {
-  // Handle API requests differently
-  if (event.request.url.includes("/api/") || event.request.url.includes("firestore")) {
+  const { request } = event
+  const url = new URL(request.url)
+
+  // Solo manejar requests HTTP/HTTPS
+  if (!request.url.startsWith("http")) {
+    return
+  }
+
+  // Estrategia para archivos estáticos
+  if (STATIC_FILES.some((file) => url.pathname === file)) {
     event.respondWith(
-      fetch(event.request)
+      caches.match(request).then((response) => {
+        return response || fetch(request)
+      }),
+    )
+    return
+  }
+
+  // Estrategia para APIs - Network First con fallback a cache
+  if (API_CACHE_PATTERNS.some((pattern) => pattern.test(request.url))) {
+    event.respondWith(
+      fetch(request)
         .then((response) => {
-          // If online, return response and cache if it's a GET request
-          if (event.request.method === "GET" && response.ok) {
+          // Si la respuesta es exitosa, guardar en cache
+          if (response.status === 200) {
             const responseClone = response.clone()
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone)
+              cache.put(request, responseClone)
             })
           }
           return response
         })
         .catch(() => {
-          // If offline, try to get from cache
-          return caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) {
-              return cachedResponse
+          // Si falla la red, intentar desde cache
+          return caches.match(request).then((response) => {
+            if (response) {
+              return response
             }
-            // Return offline fallback for API requests
+            // Si no hay cache, devolver respuesta offline
             return new Response(
               JSON.stringify({
                 error: "Offline",
-                message: "Esta acción se sincronizará cuando vuelvas a estar online",
+                message: "No hay conexión disponible",
               }),
               {
                 status: 503,
@@ -60,130 +105,174 @@ self.addEventListener("fetch", (event) => {
           })
         }),
     )
-  } else {
-    // Handle static resources
-    event.respondWith(
-      caches.match(event.request).then((response) => {
-        return response || fetch(event.request)
-      }),
-    )
+    return
   }
+
+  // Para otros requests, usar cache first
+  event.respondWith(
+    caches
+      .match(request)
+      .then((response) => {
+        return (
+          response ||
+          fetch(request).then((fetchResponse) => {
+            const responseClone = fetchResponse.clone()
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, responseClone)
+            })
+            return fetchResponse
+          })
+        )
+      })
+      .catch(() => {
+        // Fallback para páginas HTML
+        if (request.headers.get("accept").includes("text/html")) {
+          return caches.match("/")
+        }
+      }),
+  )
 })
 
-// Background Sync for offline actions
+// Background Sync para acciones offline
 self.addEventListener("sync", (event) => {
+  console.log("Background sync triggered:", event.tag)
+
   if (event.tag === "expense-sync") {
     event.waitUntil(syncExpenses())
-  }
-  if (event.tag === "group-sync") {
+  } else if (event.tag === "group-sync") {
     event.waitUntil(syncGroups())
-  }
-  if (event.tag === "user-sync") {
+  } else if (event.tag === "user-sync") {
     event.waitUntil(syncUserData())
   }
 })
 
-// Sync functions
+// Función para sincronizar gastos
 async function syncExpenses() {
   try {
-    const pendingExpenses = await getStoredData("pendingExpenses")
-    if (pendingExpenses && pendingExpenses.length > 0) {
-      for (const expense of pendingExpenses) {
-        try {
-          await fetch("/api/expenses", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(expense),
-          })
-        } catch (error) {
-          console.log("Failed to sync expense:", error)
-          throw error // Re-throw to retry later
-        }
-      }
-      // Clear synced expenses
-      await clearStoredData("pendingExpenses")
+    console.log("Syncing expenses...")
 
-      // Notify clients about successful sync
-      self.clients.matchAll().then((clients) => {
-        clients.forEach((client) => {
-          client.postMessage({
-            type: "SYNC_COMPLETE",
-            data: { type: "expenses", count: pendingExpenses.length },
-          })
+    // Obtener acciones pendientes del IndexedDB
+    const pendingActions = await getPendingActions("expenses")
+
+    for (const action of pendingActions) {
+      try {
+        const response = await fetch("/api/expenses", {
+          method: action.method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(action.data),
+        })
+
+        if (response.ok) {
+          // Eliminar acción exitosa del storage
+          await removePendingAction("expenses", action.id)
+          console.log("Expense synced successfully:", action.id)
+        } else {
+          console.error("Failed to sync expense:", action.id, response.status)
+        }
+      } catch (error) {
+        console.error("Error syncing expense:", action.id, error)
+      }
+    }
+
+    // Notificar al cliente que la sincronización terminó
+    self.clients.matchAll().then((clients) => {
+      clients.forEach((client) => {
+        client.postMessage({
+          type: "SYNC_COMPLETE",
+          data: { type: "expenses", count: pendingActions.length },
         })
       })
-    }
+    })
   } catch (error) {
-    console.log("Expense sync failed, will retry later:", error)
+    console.error("Error in expense sync:", error)
+    throw error
   }
 }
 
+// Función para sincronizar grupos
 async function syncGroups() {
   try {
-    const pendingGroups = await getStoredData("pendingGroups")
-    if (pendingGroups && pendingGroups.length > 0) {
-      for (const group of pendingGroups) {
-        try {
-          await fetch("/api/groups", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(group),
-          })
-        } catch (error) {
-          console.log("Failed to sync group:", error)
-          throw error
-        }
-      }
-      await clearStoredData("pendingGroups")
+    console.log("Syncing groups...")
 
-      self.clients.matchAll().then((clients) => {
-        clients.forEach((client) => {
-          client.postMessage({
-            type: "SYNC_COMPLETE",
-            data: { type: "groups", count: pendingGroups.length },
-          })
+    const pendingActions = await getPendingActions("groups")
+
+    for (const action of pendingActions) {
+      try {
+        const response = await fetch("/api/groups", {
+          method: action.method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(action.data),
+        })
+
+        if (response.ok) {
+          await removePendingAction("groups", action.id)
+          console.log("Group synced successfully:", action.id)
+        }
+      } catch (error) {
+        console.error("Error syncing group:", action.id, error)
+      }
+    }
+
+    self.clients.matchAll().then((clients) => {
+      clients.forEach((client) => {
+        client.postMessage({
+          type: "SYNC_COMPLETE",
+          data: { type: "groups", count: pendingActions.length },
         })
       })
-    }
+    })
   } catch (error) {
-    console.log("Group sync failed, will retry later:", error)
+    console.error("Error in group sync:", error)
+    throw error
   }
 }
 
+// Función para sincronizar datos de usuario
 async function syncUserData() {
   try {
-    const pendingUserData = await getStoredData("pendingUserData")
-    if (pendingUserData && pendingUserData.length > 0) {
-      for (const userData of pendingUserData) {
-        try {
-          await fetch("/api/user", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(userData),
-          })
-        } catch (error) {
-          console.log("Failed to sync user data:", error)
-          throw error
-        }
-      }
-      await clearStoredData("pendingUserData")
+    console.log("Syncing user data...")
 
-      self.clients.matchAll().then((clients) => {
-        clients.forEach((client) => {
-          client.postMessage({
-            type: "SYNC_COMPLETE",
-            data: { type: "userData", count: pendingUserData.length },
-          })
+    const pendingActions = await getPendingActions("users")
+
+    for (const action of pendingActions) {
+      try {
+        const response = await fetch("/api/users", {
+          method: action.method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(action.data),
+        })
+
+        if (response.ok) {
+          await removePendingAction("users", action.id)
+          console.log("User data synced successfully:", action.id)
+        }
+      } catch (error) {
+        console.error("Error syncing user data:", action.id, error)
+      }
+    }
+
+    self.clients.matchAll().then((clients) => {
+      clients.forEach((client) => {
+        client.postMessage({
+          type: "SYNC_COMPLETE",
+          data: { type: "users", count: pendingActions.length },
         })
       })
-    }
+    })
   } catch (error) {
-    console.log("User data sync failed, will retry later:", error)
+    console.error("Error in user data sync:", error)
+    throw error
   }
 }
 
-// Helper functions for IndexedDB storage
-async function getStoredData(storeName) {
+// Funciones helper para IndexedDB
+async function getPendingActions(type) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("VaquitappOfflineDB", 1)
 
@@ -191,76 +280,48 @@ async function getStoredData(storeName) {
 
     request.onsuccess = () => {
       const db = request.result
-      if (!db.objectStoreNames.contains(storeName)) {
-        resolve([])
-        return
-      }
+      const transaction = db.transaction(["pendingActions"], "readonly")
+      const store = transaction.objectStore("pendingActions")
+      const index = store.index("type")
+      const getRequest = index.getAll(type)
 
-      const transaction = db.transaction([storeName], "readonly")
-      const store = transaction.objectStore(storeName)
-      const getAllRequest = store.getAll()
-
-      getAllRequest.onsuccess = () => resolve(getAllRequest.result)
-      getAllRequest.onerror = () => reject(getAllRequest.error)
+      getRequest.onsuccess = () => resolve(getRequest.result || [])
+      getRequest.onerror = () => reject(getRequest.error)
     }
 
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result
-      if (!db.objectStoreNames.contains(storeName)) {
-        db.createObjectStore(storeName, { keyPath: "id", autoIncrement: true })
+    request.onupgradeneeded = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains("pendingActions")) {
+        const store = db.createObjectStore("pendingActions", { keyPath: "id" })
+        store.createIndex("type", "type", { unique: false })
       }
     }
   })
 }
 
-async function clearStoredData(storeName) {
+async function removePendingAction(type, id) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("VaquitappOfflineDB", 1)
 
+    request.onerror = () => reject(request.error)
+
     request.onsuccess = () => {
       const db = request.result
-      if (!db.objectStoreNames.contains(storeName)) {
-        resolve()
-        return
-      }
+      const transaction = db.transaction(["pendingActions"], "readwrite")
+      const store = transaction.objectStore("pendingActions")
+      const deleteRequest = store.delete(id)
 
-      const transaction = db.transaction([storeName], "readwrite")
-      const store = transaction.objectStore(storeName)
-      const clearRequest = store.clear()
-
-      clearRequest.onsuccess = () => resolve()
-      clearRequest.onerror = () => reject(clearRequest.error)
+      deleteRequest.onsuccess = () => resolve()
+      deleteRequest.onerror = () => reject(deleteRequest.error)
     }
   })
 }
 
-// Handle push notifications for sync updates
-self.addEventListener("push", (event) => {
-  if (event.data) {
-    const data = event.data.json()
-    const options = {
-      body: data.body || "Datos sincronizados correctamente",
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      tag: "sync-notification",
-      requireInteraction: false,
-      actions: [
-        {
-          action: "view",
-          title: "Ver cambios",
-        },
-      ],
-    }
-
-    event.waitUntil(self.registration.showNotification(data.title || "Vaquitapp", options))
+// Manejar mensajes del cliente
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting()
   }
 })
 
-// Handle notification clicks
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close()
-
-  if (event.action === "view") {
-    event.waitUntil(clients.openWindow("/"))
-  }
-})
+console.log("Service Worker loaded successfully")

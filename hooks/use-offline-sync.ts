@@ -5,30 +5,202 @@ import { useToast } from "@/hooks/use-toast"
 
 interface PendingAction {
   id: string
-  type: "expense" | "group" | "userData"
+  type: "expenses" | "groups" | "users"
+  method: "POST" | "PUT" | "DELETE"
   data: any
   timestamp: number
 }
 
-export function useOfflineSync() {
-  const [isOnline, setIsOnline] = useState(true)
-  const [pendingActions, setPendingActions] = useState<PendingAction[]>([])
-  const [syncInProgress, setSyncInProgress] = useState(false)
-  const { toast } = useToast()
+interface SyncStatus {
+  isOnline: boolean
+  pendingActions: PendingAction[]
+  isSyncing: boolean
+  lastSyncTime: Date | null
+}
 
-  // Monitor online/offline status
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true)
-      toast({
-        title: "Conexión restaurada",
-        description: "Sincronizando datos pendientes...",
+export function useOfflineSync() {
+  const { toast } = useToast()
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    isOnline: navigator.onLine,
+    pendingActions: [],
+    isSyncing: false,
+    lastSyncTime: null,
+  })
+
+  // Inicializar IndexedDB
+  const initDB = useCallback(async () => {
+    return new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("VaquitappOfflineDB", 1)
+
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => resolve(request.result)
+
+      request.onupgradeneeded = () => {
+        const db = request.result
+        if (!db.objectStoreNames.contains("pendingActions")) {
+          const store = db.createObjectStore("pendingActions", { keyPath: "id" })
+          store.createIndex("type", "type", { unique: false })
+        }
+      }
+    })
+  }, [])
+
+  // Agregar acción pendiente
+  const addPendingAction = useCallback(
+    async (action: Omit<PendingAction, "id" | "timestamp">) => {
+      try {
+        const db = await initDB()
+        const pendingAction: PendingAction = {
+          ...action,
+          id: `${action.type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: Date.now(),
+        }
+
+        const transaction = db.transaction(["pendingActions"], "readwrite")
+        const store = transaction.objectStore("pendingActions")
+        await store.add(pendingAction)
+
+        // Actualizar estado local
+        setSyncStatus((prev) => ({
+          ...prev,
+          pendingActions: [...prev.pendingActions, pendingAction],
+        }))
+
+        // Registrar background sync si está disponible
+        if ("serviceWorker" in navigator && "sync" in window.ServiceWorkerRegistration.prototype) {
+          const registration = await navigator.serviceWorker.ready
+          await registration.sync.register(`${action.type}-sync`)
+        }
+
+        toast({
+          title: "Acción guardada",
+          description: "Se sincronizará cuando vuelvas a estar online",
+        })
+
+        return pendingAction.id
+      } catch (error) {
+        console.error("Error adding pending action:", error)
+        toast({
+          title: "Error",
+          description: "No se pudo guardar la acción offline",
+          variant: "destructive",
+        })
+        throw error
+      }
+    },
+    [initDB, toast],
+  )
+
+  // Obtener acciones pendientes
+  const getPendingActions = useCallback(async () => {
+    try {
+      const db = await initDB()
+      const transaction = db.transaction(["pendingActions"], "readonly")
+      const store = transaction.objectStore("pendingActions")
+
+      return new Promise<PendingAction[]>((resolve, reject) => {
+        const request = store.getAll()
+        request.onsuccess = () => resolve(request.result || [])
+        request.onerror = () => reject(request.error)
       })
-      triggerBackgroundSync()
+    } catch (error) {
+      console.error("Error getting pending actions:", error)
+      return []
+    }
+  }, [initDB])
+
+  // Sincronizar manualmente
+  const syncNow = useCallback(async () => {
+    if (!syncStatus.isOnline) {
+      console.log("Cannot sync while offline")
+      toast({
+        title: "Sin conexión",
+        description: "No se puede sincronizar mientras estás offline",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSyncStatus((prev) => ({ ...prev, isSyncing: true }))
+
+    try {
+      const pendingActions = await getPendingActions()
+
+      for (const action of pendingActions) {
+        try {
+          let endpoint = ""
+          switch (action.type) {
+            case "expenses":
+              endpoint = "/api/expenses"
+              break
+            case "groups":
+              endpoint = "/api/groups"
+              break
+            case "users":
+              endpoint = "/api/users"
+              break
+          }
+
+          const response = await fetch(endpoint, {
+            method: action.method,
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(action.data),
+          })
+
+          if (response.ok) {
+            // Eliminar acción exitosa
+            const db = await initDB()
+            const transaction = db.transaction(["pendingActions"], "readwrite")
+            const store = transaction.objectStore("pendingActions")
+            await store.delete(action.id)
+          }
+        } catch (error) {
+          console.error("Error syncing action:", action.id, error)
+        }
+      }
+
+      // Actualizar estado
+      const remainingActions = await getPendingActions()
+      setSyncStatus((prev) => ({
+        ...prev,
+        pendingActions: remainingActions,
+        isSyncing: false,
+        lastSyncTime: new Date(),
+      }))
+
+      toast({
+        title: "Sincronización completada",
+        description: "Todas las acciones pendientes se han sincronizado correctamente",
+      })
+    } catch (error) {
+      console.error("Error during manual sync:", error)
+      setSyncStatus((prev) => ({ ...prev, isSyncing: false }))
+      toast({
+        title: "Error",
+        description: "Hubo un error durante la sincronización",
+        variant: "destructive",
+      })
+    }
+  }, [syncStatus.isOnline, getPendingActions, initDB, toast])
+
+  // Efectos
+  useEffect(() => {
+    // Cargar acciones pendientes al inicializar
+    getPendingActions().then((actions) => {
+      setSyncStatus((prev) => ({ ...prev, pendingActions: actions }))
+    })
+
+    // Escuchar cambios de conectividad
+    const handleOnline = () => {
+      setSyncStatus((prev) => ({ ...prev, isOnline: true }))
+      // Intentar sincronizar automáticamente cuando vuelve la conexión
+      setTimeout(syncNow, 1000)
     }
 
     const handleOffline = () => {
-      setIsOnline(false)
+      setSyncStatus((prev) => ({ ...prev, isOnline: false }))
       toast({
         title: "Sin conexión",
         description: "Los cambios se guardarán y sincronizarán cuando vuelvas a estar online",
@@ -36,184 +208,39 @@ export function useOfflineSync() {
       })
     }
 
+    // Escuchar mensajes del service worker
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "SYNC_COMPLETE") {
+        console.log("Sync completed:", event.data.data)
+        getPendingActions().then((actions) => {
+          setSyncStatus((prev) => ({
+            ...prev,
+            pendingActions: actions,
+            lastSyncTime: new Date(),
+          }))
+        })
+        toast({
+          title: "Sincronización completada",
+          description: "Todas las acciones pendientes se han sincronizado correctamente",
+        })
+      }
+    }
+
     window.addEventListener("online", handleOnline)
     window.addEventListener("offline", handleOffline)
-
-    // Check initial status
-    setIsOnline(navigator.onLine)
+    navigator.serviceWorker?.addEventListener("message", handleMessage)
 
     return () => {
       window.removeEventListener("online", handleOnline)
       window.removeEventListener("offline", handleOffline)
-    }
-  }, [toast])
-
-  // Listen for sync messages from service worker
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === "SYNC_COMPLETE") {
-        const { type, count } = event.data.data
-        toast({
-          title: "Sincronización completada",
-          description: `${count} ${type} sincronizados correctamente`,
-        })
-        loadPendingActions()
-      }
-    }
-
-    navigator.serviceWorker?.addEventListener("message", handleMessage)
-    return () => {
       navigator.serviceWorker?.removeEventListener("message", handleMessage)
     }
-  }, [toast])
-
-  // Load pending actions from IndexedDB
-  const loadPendingActions = useCallback(async () => {
-    try {
-      const db = await openDB()
-      const stores = ["pendingExpenses", "pendingGroups", "pendingUserData"]
-      const allPending: PendingAction[] = []
-
-      for (const storeName of stores) {
-        const data = await getFromStore(db, storeName)
-        allPending.push(
-          ...data.map((item: any) => ({
-            id: item.id,
-            type: storeName.replace("pending", "").toLowerCase() as any,
-            data: item,
-            timestamp: item.timestamp || Date.now(),
-          })),
-        )
-      }
-
-      setPendingActions(allPending)
-    } catch (error) {
-      console.error("Error loading pending actions:", error)
-    }
-  }, [])
-
-  // Store action for offline sync
-  const storeOfflineAction = useCallback(
-    async (type: "expense" | "group" | "userData", data: any) => {
-      try {
-        const db = await openDB()
-        const storeName = `pending${type.charAt(0).toUpperCase() + type.slice(1)}s`
-        const actionData = {
-          ...data,
-          id: data.id || generateId(),
-          timestamp: Date.now(),
-        }
-
-        await addToStore(db, storeName, actionData)
-        await loadPendingActions()
-
-        // Register for background sync
-        if ("serviceWorker" in navigator && "sync" in window.ServiceWorkerRegistration.prototype) {
-          const registration = await navigator.serviceWorker.ready
-          await registration.sync.register(`${type}-sync`)
-        }
-
-        toast({
-          title: "Acción guardada",
-          description: "Se sincronizará cuando vuelvas a estar online",
-        })
-      } catch (error) {
-        console.error("Error storing offline action:", error)
-        toast({
-          title: "Error",
-          description: "No se pudo guardar la acción offline",
-          variant: "destructive",
-        })
-      }
-    },
-    [toast, loadPendingActions],
-  )
-
-  // Trigger background sync manually
-  const triggerBackgroundSync = useCallback(async () => {
-    if (!("serviceWorker" in navigator) || !("sync" in window.ServiceWorkerRegistration.prototype)) {
-      return
-    }
-
-    try {
-      setSyncInProgress(true)
-      const registration = await navigator.serviceWorker.ready
-
-      await Promise.all([
-        registration.sync.register("expense-sync"),
-        registration.sync.register("group-sync"),
-        registration.sync.register("user-sync"),
-      ])
-    } catch (error) {
-      console.error("Error triggering background sync:", error)
-    } finally {
-      setSyncInProgress(false)
-    }
-  }, [])
-
-  // Initialize
-  useEffect(() => {
-    loadPendingActions()
-  }, [loadPendingActions])
+  }, [getPendingActions, syncNow, toast])
 
   return {
-    isOnline,
-    pendingActions,
-    syncInProgress,
-    storeOfflineAction,
-    triggerBackgroundSync,
-    loadPendingActions,
+    ...syncStatus,
+    addPendingAction,
+    syncNow,
+    getPendingActions,
   }
-}
-
-// Helper functions for IndexedDB
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("VaquitappOfflineDB", 1)
-
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(request.result)
-
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result
-
-      const stores = ["pendingExpenses", "pendingGroups", "pendingUserData"]
-      stores.forEach((storeName) => {
-        if (!db.objectStoreNames.contains(storeName)) {
-          db.createObjectStore(storeName, { keyPath: "id", autoIncrement: true })
-        }
-      })
-    }
-  })
-}
-
-function getFromStore(db: IDBDatabase, storeName: string): Promise<any[]> {
-  return new Promise((resolve, reject) => {
-    if (!db.objectStoreNames.contains(storeName)) {
-      resolve([])
-      return
-    }
-
-    const transaction = db.transaction([storeName], "readonly")
-    const store = transaction.objectStore(storeName)
-    const request = store.getAll()
-
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-  })
-}
-
-function addToStore(db: IDBDatabase, storeName: string, data: any): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([storeName], "readwrite")
-    const store = transaction.objectStore(storeName)
-    const request = store.add(data)
-
-    request.onsuccess = () => resolve()
-    request.onerror = () => reject(request.error)
-  })
-}
-
-function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2)
 }
