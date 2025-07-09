@@ -1,24 +1,56 @@
 {
-  "name": "Vaquitapp",
+  "name": "Vaquitapp - Divide gastos entre amigos",
   "short_name": "Vaquitapp",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#22c55e",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "description": "Vaquitapp 🐮 te ayuda a dividir los gastos entre amigos de forma simple, informal y rápida. Ideal para juntadas, viajes y todo lo que implique compartir gastos.",
   "scope": "/",
+  "categories": ["finance", "utilities", "social"],
+  "lang": "es",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
-  "id": "/"
+  "shortcuts": [
+    {
+      "name": "Crear grupo",
+      "short_name": "Nuevo grupo",
+      "description": "Crear un nuevo grupo para dividir gastos",
+      "url": "/create-group",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Mis grupos",
+      "short_name": "Grupos",
+      "description": "Ver todos mis grupos",
+      "url": "/groups",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "id": "/",
+  "prefer_related_applications": false
 }
