@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useToast } from "@/hooks/use-toast"
 
 interface PendingAction {
   id: string
@@ -19,6 +20,7 @@ interface SyncStatus {
 }
 
 export function useOfflineSync() {
+  const { toast } = useToast()
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isOnline: navigator.onLine,
     isSyncing: false,
@@ -95,6 +97,15 @@ export function useOfflineSync() {
         await storePendingAction(action)
         await loadPendingActions()
 
+        // Mostrar notificación solo si está offline
+        if (!syncStatus.isOnline) {
+          toast({
+            title: "Sin conexión",
+            description: "Los cambios se guardarán y sincronizarán automáticamente cuando vuelvas a estar online",
+            variant: "default",
+          })
+        }
+
         // Si estamos online, intentar sincronizar inmediatamente
         if (syncStatus.isOnline) {
           triggerSync()
@@ -103,10 +114,15 @@ export function useOfflineSync() {
         return action.id
       } catch (error) {
         console.error("Error storing pending action:", error)
+        toast({
+          title: "Error",
+          description: "No se pudo guardar la acción",
+          variant: "destructive",
+        })
         throw error
       }
     },
-    [syncStatus.isOnline, loadPendingActions],
+    [syncStatus.isOnline, loadPendingActions, toast],
   )
 
   // Función para disparar sincronización manual

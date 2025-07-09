@@ -1,43 +1,22 @@
 {
-  "name": "Vaquitapp - Divide gastos entre amigos",
+  "name": "Vaquitapp - Gastos Compartidos",
   "short_name": "Vaquitapp",
-  "description": "Vaquitapp 🐮 te ayuda a dividir los gastos entre amigos de forma simple, informal y rápida. Ideal para juntadas, viajes y todo lo que implique compartir gastos.",
+  "description": "Aplicación para gestionar gastos compartidos entre amigos y grupos",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#22c55e",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "scope": "/",
   "lang": "es",
   "dir": "ltr",
-  "categories": ["finance", "utilities"],
+  "prefer_related_applications": false,
+  "related_applications": [],
   "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "categories": ["finance", "productivity", "social"],
   "launch_handler": {
     "client_mode": "navigate-existing"
   },
-  "screenshots": [
-    {
-      "src": "/screenshots/mobile-1.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Dashboard principal con grupos de gastos"
-    },
-    {
-      "src": "/screenshots/mobile-2.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Agregar nuevo gasto compartido"
-    },
-    {
-      "src": "/screenshots/desktop-1.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Vista de escritorio del dashboard"
-    }
-  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -46,12 +25,6 @@
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
@@ -61,10 +34,62 @@
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
-  "id": "/",
-  "prefer_related_applications": false,
-  "related_applications": []
+  "screenshots": [
+    {
+      "src": "/screenshots/mobile-1.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Dashboard principal de Vaquitapp"
+    },
+    {
+      "src": "/screenshots/mobile-2.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Formulario para agregar gastos"
+    },
+    {
+      "src": "/screenshots/desktop-1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Vista de escritorio de Vaquitapp"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Agregar Gasto",
+      "short_name": "Nuevo Gasto",
+      "description": "Agregar un nuevo gasto rápidamente",
+      "url": "/add-expense",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Ver Grupos",
+      "short_name": "Grupos",
+      "description": "Ver todos mis grupos",
+      "url": "/groups",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
 }

@@ -1,42 +1,41 @@
 const CACHE_NAME = "vaquitapp-v1"
-const STATIC_CACHE_NAME = "vaquitapp-static-v1"
+const STATIC_CACHE = "vaquitapp-static-v1"
+const API_CACHE = "vaquitapp-api-v1"
 
 // Archivos estáticos para cachear
-const STATIC_FILES = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/cow-logo.svg"]
+const STATIC_FILES = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/offline.html"]
 
-// URLs de API para cachear dinámicamente
-const API_CACHE_PATTERNS = [/^https:\/\/.*\.googleapis\.com/, /^https:\/\/.*\.firebaseapp\.com/, /\/api\//]
+// URLs de API para cachear
+const API_URLS = ["/api/expenses", "/api/groups", "/api/users"]
 
-// Install event - cachear archivos estáticos
+// Instalar service worker
 self.addEventListener("install", (event) => {
   console.log("Service Worker installing...")
+
   event.waitUntil(
-    caches
-      .open(STATIC_CACHE_NAME)
-      .then((cache) => {
-        console.log("Caching static files")
+    Promise.all([
+      caches.open(STATIC_CACHE).then((cache) => {
         return cache.addAll(STATIC_FILES)
-      })
-      .then(() => {
-        console.log("Static files cached successfully")
-        return self.skipWaiting()
-      })
-      .catch((error) => {
-        console.error("Error caching static files:", error)
       }),
+      caches.open(API_CACHE),
+    ]).then(() => {
+      console.log("Service Worker installed successfully")
+      return self.skipWaiting()
+    }),
   )
 })
 
-// Activate event - limpiar caches antiguos
+// Activar service worker
 self.addEventListener("activate", (event) => {
   console.log("Service Worker activating...")
+
   event.waitUntil(
     caches
       .keys()
       .then((cacheNames) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
-            if (cacheName !== CACHE_NAME && cacheName !== STATIC_CACHE_NAME) {
+            if (cacheName !== STATIC_CACHE && cacheName !== API_CACHE) {
               console.log("Deleting old cache:", cacheName)
               return caches.delete(cacheName)
             }
@@ -50,15 +49,10 @@ self.addEventListener("activate", (event) => {
   )
 })
 
-// Fetch event - estrategia de cache
+// Interceptar requests
 self.addEventListener("fetch", (event) => {
   const { request } = event
   const url = new URL(request.url)
-
-  // Solo manejar requests HTTP/HTTPS
-  if (!request.url.startsWith("http")) {
-    return
-  }
 
   // Estrategia para archivos estáticos
   if (STATIC_FILES.some((file) => url.pathname === file)) {
@@ -70,374 +64,218 @@ self.addEventListener("fetch", (event) => {
     return
   }
 
-  // Estrategia para APIs - Network First con fallback a cache
-  if (API_CACHE_PATTERNS.some((pattern) => pattern.test(request.url))) {
+  // Estrategia para APIs
+  if (url.pathname.startsWith("/api/")) {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Si la respuesta es exitosa, guardar en cache
-          if (response.status === 200) {
+          // Solo cachear respuestas exitosas de GET
+          if (request.method === "GET" && response.status === 200) {
             const responseClone = response.clone()
-            caches.open(CACHE_NAME).then((cache) => {
+            caches.open(API_CACHE).then((cache) => {
               cache.put(request, responseClone)
             })
           }
           return response
         })
         .catch(() => {
-          // Si falla la red, intentar desde cache
-          return caches.match(request).then((response) => {
-            if (response) {
-              return response
-            }
-            // Si no hay cache, devolver respuesta offline
-            return new Response(
-              JSON.stringify({
-                error: "Offline",
-                message: "No hay conexión disponible",
-              }),
-              {
-                status: 503,
-                statusText: "Service Unavailable",
-                headers: { "Content-Type": "application/json" },
-              },
-            )
-          })
+          // Si falla, intentar desde cache
+          return caches.match(request)
         }),
     )
     return
   }
 
-  // Para otros requests, usar cache first
+  // Estrategia por defecto: network first, fallback to cache
   event.respondWith(
-    caches
-      .match(request)
+    fetch(request)
       .then((response) => {
-        return (
-          response ||
-          fetch(request).then((fetchResponse) => {
-            const responseClone = fetchResponse.clone()
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseClone)
-            })
-            return fetchResponse
-          })
-        )
+        return response
       })
       .catch(() => {
-        // Fallback para páginas HTML
-        if (request.headers.get("accept").includes("text/html")) {
-          return caches.match("/")
-        }
+        return caches.match(request)
       }),
   )
 })
 
-// Background Sync para acciones offline
+// Background Sync
 self.addEventListener("sync", (event) => {
   console.log("Background sync triggered:", event.tag)
 
   if (event.tag === "expense-sync") {
-    event.waitUntil(syncExpenses())
+    event.waitUntil(syncPendingActions("expenses"))
   } else if (event.tag === "group-sync") {
-    event.waitUntil(syncGroups())
+    event.waitUntil(syncPendingActions("groups"))
   } else if (event.tag === "user-sync") {
-    event.waitUntil(syncUserData())
+    event.waitUntil(syncPendingActions("users"))
   }
 })
 
-// Push notifications event
+// Función para sincronizar acciones pendientes
+async function syncPendingActions(type) {
+  try {
+    console.log(`Syncing pending ${type} actions...`)
+
+    const db = await openIndexedDB()
+    const actions = await getPendingActionsByType(db, type)
+
+    let syncedCount = 0
+
+    for (const action of actions) {
+      try {
+        const endpoint = `/api/${type}`
+        const response = await fetch(endpoint, {
+          method: action.method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(action.data),
+        })
+
+        if (response.ok) {
+          await deletePendingAction(db, action.id)
+          syncedCount++
+          console.log(`Synced ${type} action:`, action.id)
+        } else {
+          console.error(`Failed to sync ${type} action:`, action.id, response.status)
+          // Incrementar contador de reintentos
+          await incrementRetryCount(db, action.id)
+        }
+      } catch (error) {
+        console.error(`Error syncing ${type} action:`, action.id, error)
+        await incrementRetryCount(db, action.id)
+      }
+    }
+
+    // Notificar a los clientes sobre la sincronización completada
+    const clients = await self.clients.matchAll()
+    clients.forEach((client) => {
+      client.postMessage({
+        type: "SYNC_COMPLETE",
+        data: { type, count: syncedCount },
+      })
+    })
+
+    console.log(`Sync completed for ${type}: ${syncedCount} actions synced`)
+  } catch (error) {
+    console.error(`Error during ${type} sync:`, error)
+  }
+}
+
+// Push Notifications
 self.addEventListener("push", (event) => {
   console.log("Push notification received:", event)
 
-  let notificationData = {
-    title: "Vaquitapp",
-    body: "Tienes nuevas actualizaciones",
+  const options = {
+    body: "Tienes nuevas actualizaciones en Vaquitapp",
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    tag: "vaquitapp-notification",
-    requireInteraction: false,
+    vibrate: [100, 50, 100],
+    data: {
+      dateOfArrival: Date.now(),
+      primaryKey: 1,
+    },
     actions: [
       {
-        action: "view",
-        title: "Ver",
+        action: "explore",
+        title: "Ver detalles",
         icon: "/icons/icon-192.png",
       },
       {
-        action: "dismiss",
+        action: "close",
         title: "Cerrar",
+        icon: "/icons/icon-192.png",
       },
     ],
-    data: {
-      url: "/",
-      timestamp: Date.now(),
-    },
   }
 
-  // Si hay datos en el push, usarlos
   if (event.data) {
-    try {
-      const pushData = event.data.json()
-      notificationData = {
-        ...notificationData,
-        ...pushData,
-        data: {
-          ...notificationData.data,
-          ...pushData.data,
-        },
-      }
-    } catch (error) {
-      console.error("Error parsing push data:", error)
-    }
+    const data = event.data.json()
+    options.body = data.body || options.body
+    options.data = { ...options.data, ...data }
   }
 
-  event.waitUntil(
-    self.registration
-      .showNotification(notificationData.title, notificationData)
-      .then(() => {
-        console.log("Notification shown successfully")
-      })
-      .catch((error) => {
-        console.error("Error showing notification:", error)
-      }),
-  )
+  event.waitUntil(self.registration.showNotification("Vaquitapp", options))
 })
 
-// Notification click event
+// Manejar clicks en notificaciones
 self.addEventListener("notificationclick", (event) => {
-  console.log("Notification clicked:", event)
+  console.log("Notification click received:", event)
 
   event.notification.close()
 
-  if (event.action === "view" || !event.action) {
-    // Abrir la app o navegar a una URL específica
-    const urlToOpen = event.notification.data?.url || "/"
-
-    event.waitUntil(
-      clients
-        .matchAll({
-          type: "window",
-          includeUncontrolled: true,
-        })
-        .then((clientList) => {
-          // Si ya hay una ventana abierta, enfocarla
-          for (const client of clientList) {
-            if (client.url.includes(urlToOpen) && "focus" in client) {
-              return client.focus()
-            }
-          }
-
-          // Si no hay ventana abierta, abrir una nueva
-          if (clients.openWindow) {
-            return clients.openWindow(urlToOpen)
-          }
-        }),
-    )
-  } else if (event.action === "dismiss") {
-    // Solo cerrar la notificación (ya se cerró arriba)
-    console.log("Notification dismissed")
+  if (event.action === "explore") {
+    event.waitUntil(clients.openWindow("/"))
+  } else if (event.action === "close") {
+    // Solo cerrar la notificación
+    return
+  } else {
+    // Click en el cuerpo de la notificación
+    event.waitUntil(clients.openWindow("/"))
   }
 })
 
-// Función para sincronizar gastos
-async function syncExpenses() {
-  try {
-    console.log("Syncing expenses...")
-
-    // Obtener acciones pendientes del IndexedDB
-    const pendingActions = await getPendingActions("expenses")
-
-    for (const action of pendingActions) {
-      try {
-        const response = await fetch("/api/expenses", {
-          method: action.method,
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(action.data),
-        })
-
-        if (response.ok) {
-          // Eliminar acción exitosa del storage
-          await removePendingAction("expenses", action.id)
-          console.log("Expense synced successfully:", action.id)
-        } else {
-          console.error("Failed to sync expense:", action.id, response.status)
-        }
-      } catch (error) {
-        console.error("Error syncing expense:", action.id, error)
-      }
-    }
-
-    // Notificar al cliente que la sincronización terminó
-    self.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({
-          type: "SYNC_COMPLETE",
-          data: { type: "expenses", count: pendingActions.length },
-        })
-      })
-    })
-
-    // Mostrar notificación de sincronización completada
-    if (pendingActions.length > 0) {
-      await self.registration.showNotification("Sincronización completada", {
-        body: `${pendingActions.length} gastos sincronizados correctamente`,
-        icon: "/icons/icon-192.png",
-        tag: "sync-complete",
-        requireInteraction: false,
-      })
-    }
-  } catch (error) {
-    console.error("Error in expense sync:", error)
-    throw error
-  }
-}
-
-// Función para sincronizar grupos
-async function syncGroups() {
-  try {
-    console.log("Syncing groups...")
-
-    const pendingActions = await getPendingActions("groups")
-
-    for (const action of pendingActions) {
-      try {
-        const response = await fetch("/api/groups", {
-          method: action.method,
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(action.data),
-        })
-
-        if (response.ok) {
-          await removePendingAction("groups", action.id)
-          console.log("Group synced successfully:", action.id)
-        }
-      } catch (error) {
-        console.error("Error syncing group:", action.id, error)
-      }
-    }
-
-    self.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({
-          type: "SYNC_COMPLETE",
-          data: { type: "groups", count: pendingActions.length },
-        })
-      })
-    })
-
-    if (pendingActions.length > 0) {
-      await self.registration.showNotification("Grupos sincronizados", {
-        body: `${pendingActions.length} grupos actualizados`,
-        icon: "/icons/icon-192.png",
-        tag: "sync-complete",
-      })
-    }
-  } catch (error) {
-    console.error("Error in group sync:", error)
-    throw error
-  }
-}
-
-// Función para sincronizar datos de usuario
-async function syncUserData() {
-  try {
-    console.log("Syncing user data...")
-
-    const pendingActions = await getPendingActions("users")
-
-    for (const action of pendingActions) {
-      try {
-        const response = await fetch("/api/users", {
-          method: action.method,
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(action.data),
-        })
-
-        if (response.ok) {
-          await removePendingAction("users", action.id)
-          console.log("User data synced successfully:", action.id)
-        }
-      } catch (error) {
-        console.error("Error syncing user data:", action.id, error)
-      }
-    }
-
-    self.clients.matchAll().then((clients) => {
-      clients.forEach((client) => {
-        client.postMessage({
-          type: "SYNC_COMPLETE",
-          data: { type: "users", count: pendingActions.length },
-        })
-      })
-    })
-  } catch (error) {
-    console.error("Error in user data sync:", error)
-    throw error
-  }
-}
-
 // Funciones helper para IndexedDB
-async function getPendingActions(type) {
+function openIndexedDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("VaquitappOfflineDB", 1)
 
     request.onerror = () => reject(request.error)
-
-    request.onsuccess = () => {
-      const db = request.result
-      if (!db.objectStoreNames.contains("pendingActions")) {
-        resolve([])
-        return
-      }
-
-      const transaction = db.transaction(["pendingActions"], "readonly")
-      const store = transaction.objectStore("pendingActions")
-      const index = store.index("type")
-      const getRequest = index.getAll(type)
-
-      getRequest.onsuccess = () => resolve(getRequest.result || [])
-      getRequest.onerror = () => reject(getRequest.error)
-    }
+    request.onsuccess = () => resolve(request.result)
 
     request.onupgradeneeded = () => {
       const db = request.result
       if (!db.objectStoreNames.contains("pendingActions")) {
         const store = db.createObjectStore("pendingActions", { keyPath: "id" })
         store.createIndex("type", "type", { unique: false })
+        store.createIndex("timestamp", "timestamp", { unique: false })
       }
     }
   })
 }
 
-async function removePendingAction(type, id) {
+function getPendingActionsByType(db, type) {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open("VaquitappOfflineDB", 1)
+    const transaction = db.transaction(["pendingActions"], "readonly")
+    const store = transaction.objectStore("pendingActions")
+    const index = store.index("type")
+    const request = index.getAll(type)
 
+    request.onsuccess = () => resolve(request.result || [])
     request.onerror = () => reject(request.error)
-
-    request.onsuccess = () => {
-      const db = request.result
-      const transaction = db.transaction(["pendingActions"], "readwrite")
-      const store = transaction.objectStore("pendingActions")
-      const deleteRequest = store.delete(id)
-
-      deleteRequest.onsuccess = () => resolve()
-      deleteRequest.onerror = () => reject(deleteRequest.error)
-    }
   })
 }
 
-// Manejar mensajes del cliente
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting()
-  }
-})
+function deletePendingAction(db, actionId) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["pendingActions"], "readwrite")
+    const store = transaction.objectStore("pendingActions")
+    const request = store.delete(actionId)
 
-console.log("Service Worker loaded successfully")
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error)
+  })
+}
+
+function incrementRetryCount(db, actionId) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["pendingActions"], "readwrite")
+    const store = transaction.objectStore("pendingActions")
+
+    const getRequest = store.get(actionId)
+    getRequest.onsuccess = () => {
+      const action = getRequest.result
+      if (action) {
+        action.retryCount = (action.retryCount || 0) + 1
+        action.lastRetry = Date.now()
+
+        const putRequest = store.put(action)
+        putRequest.onsuccess = () => resolve()
+        putRequest.onerror = () => reject(putRequest.error)
+      } else {
+        resolve()
+      }
+    }
+    getRequest.onerror = () => reject(getRequest.error)
+  })
+}
