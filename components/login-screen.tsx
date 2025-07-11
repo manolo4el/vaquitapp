@@ -6,9 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { LogIn, Loader2 } from "lucide-react"
 import Image from "next/image"
-<link rel="manifest" href="/manifest.json" />
 
-export function LoginScreen() {
+interface LoginScreenProps {
+  onNavigate?: (page: string) => void
+}
+
+export function LoginScreen({ onNavigate }: LoginScreenProps) {
   const { login } = useAuth()
   const [isLoggingIn, setIsLoggingIn] = useState(false)
 
@@ -24,7 +27,7 @@ export function LoginScreen() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5 p-4">
       <Card className="w-full max-w-md border-0 shadow-2xl bg-card/95 backdrop-blur-sm">
         <CardHeader className="text-center space-y-6 pb-8">
           <div className="flex justify-center">
@@ -119,6 +122,18 @@ export function LoginScreen() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Privacy Policy Link - Discreto */}
+      <div className="mt-6 text-center">
+        {onNavigate && (
+          <button
+            onClick={() => onNavigate("privacy-policy")}
+            className="text-xs text-muted-foreground/60 hover:text-muted-foreground underline transition-colors duration-200"
+          >
+            Política de Privacidad
+          </button>
+        )}
+      </div>
     </div>
   )
 }
