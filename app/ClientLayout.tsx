@@ -1,24 +1,26 @@
 "use client"
 
 import type React from "react"
+
+import { AuthProvider } from "@/contexts/auth-context"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
-import { AuthProvider } from "@/contexts/auth-context"
-import { ErrorBoundary } from "@/components/error-boundary"
-import PWAHead from "@/components/pwa-head"
-import SyncStatus from "@/components/sync-status"
+import { PWAHead } from "@/components/pwa-head"
+import { SyncStatus } from "@/components/sync-status"
 
-export default function ClientLayout({ children }: { children: React.ReactNode }) {
+export default function ClientLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
-    <ErrorBoundary>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-        <AuthProvider>
-          <PWAHead />
-          {children}
-          <SyncStatus />
-          <Toaster />
-        </AuthProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange={false}>
+      <AuthProvider>
+        <PWAHead />
+        <SyncStatus />
+        {children}
+        <Toaster />
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

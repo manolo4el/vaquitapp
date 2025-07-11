@@ -18,7 +18,7 @@ import { DebtConsolidationPage } from "@/components/debt-consolidation-page"
 import { ExpenseDetailPage } from "@/components/expense-detail-page"
 import { useAnalytics } from "@/hooks/use-analytics"
 import { NotificationsDropdown } from "@/components/notifications-dropdown"
-<link rel="manifest" href="/manifest.json" />
+;<link rel="manifest" href="/manifest.json" />
 
 export default function Page() {
   const { user, userProfile, logout, loading, authError } = useAuth()
@@ -112,18 +112,8 @@ export default function Page() {
   // Loading normal - Logo centrado
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-secondary/10 to-accent/5">
-        <div className="text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="animate-bounce">
-              <Image src="/cow-logo.svg" alt="Loading" width={64} height={64} className="opacity-60" />
-            </div>
-          </div>
-          <p className="text-muted-foreground">Cargando tu rebaño...</p>
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-          </div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
       </div>
     )
   }

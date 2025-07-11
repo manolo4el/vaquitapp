@@ -1,35 +1,71 @@
 import type React from "react"
 import type { Metadata } from "next"
-import ClientLayout from "./ClientLayout"
+import { Inter } from "next/font/google"
 import "./globals.css"
+import ClientLayout from "./ClientLayout"
+
+const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Vaquitapp - Divide gastos entre amigos",
-  description:
-    "Vaquitapp 🐮 te ayuda a dividir los gastos entre amigos de forma simple, informal y rápida. Ideal para juntadas, viajes y todo lo que implique compartir gastos.",
-  manifest: "/manifest.json",
-  themeColor: "#22c55e",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
-  icons: {
-    icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+  title: {
+    default: "Vaquitapp - Gastos entre amigos",
+    template: "%s | Vaquitapp",
+  },
+  description: "Organiza y divide gastos entre amigos de forma fácil y rápida",
+  keywords: ["gastos", "amigos", "dividir", "expenses", "split", "vaquitapp"],
+  authors: [{ name: "Vaquitapp Team" }],
+  creator: "Vaquitapp",
+  publisher: "Vaquitapp",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  metadataBase: new URL("https://vaquitapp.vercel.app"),
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "Vaquitapp - Gastos entre amigos",
+    description: "Organiza y divide gastos entre amigos de forma fácil y rápida",
+    url: "https://vaquitapp.vercel.app",
+    siteName: "Vaquitapp",
+    locale: "es_ES",
+    type: "website",
+    images: [
+      {
+        url: "/icons/icon-512.png",
+        width: 512,
+        height: 512,
+        alt: "Vaquitapp Logo",
+      },
     ],
-    shortcut: "/icons/icon-192.png",
-    apple: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Vaquitapp - Gastos entre amigos",
+    description: "Organiza y divide gastos entre amigos de forma fácil y rápida",
+    images: ["/icons/icon-512.png"],
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Vaquitapp",
   },
-  other: {
-    "mobile-web-app-capable": "yes",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icons/icon-192.png",
+    shortcut: "/icons/icon-192.png",
+    apple: "/icons/icon-192.png",
   },
-  generator: "v0.dev",
+  themeColor: "#22c55e",
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -38,26 +74,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es">
-      <body>
+    <html lang="es" suppressHydrationWarning>
+      <body className={inter.className}>
         <ClientLayout>{children}</ClientLayout>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js')
-                    .then(function(registration) {
-                      console.log('SW registered: ', registration);
-                    })
-                    .catch(function(registrationError) {
-                      console.log('SW registration failed: ', registrationError);
-                    });
-                });
-              }
-            `,
-          }}
-        />
       </body>
     </html>
   )

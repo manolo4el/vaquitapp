@@ -1,142 +1,66 @@
-# Configuración de Firestore para Vaquitapp
+# Firestore Setup Instructions
 
-## Reglas de Seguridad
+## 1. Create a Firebase Project
 
-### 1. Copiar las reglas
-Copia las reglas del archivo `scripts/firestore-rules.js` y pégalas en Firebase Console.
+1. Go to [Firebase Console](https://console.firebase.google.com/)
+2. Click "Add project"
+3. Enter project name: `vaquitapp`
+4. Enable Google Analytics (optional)
+5. Create project
 
-### 2. Índices necesarios
-Firestore creará automáticamente los índices simples, pero es posible que necesites crear índices compuestos para:
+## 2. Enable Authentication
 
-#### Para notificaciones:
+1. In Firebase Console, go to "Authentication"
+2. Click "Get started"
+3. Go to "Sign-in method" tab
+4. Enable "Google" provider
+5. Add your domain to authorized domains
+
+## 3. Create Firestore Database
+
+1. Go to "Firestore Database"
+2. Click "Create database"
+3. Choose "Start in test mode" (we'll add security rules later)
+4. Select location closest to your users
+
+## 4. Get Configuration
+
+1. Go to Project Settings (gear icon)
+2. Scroll down to "Your apps"
+3. Click "Web app" icon
+4. Register app with name "Vaquitapp"
+5. Copy the configuration object
+
+## 5. Add Environment Variables
+
+Create a `.env.local` file in your project root:
+
 \`\`\`
-Colección: notifications
-Campos: userId (Ascending), createdAt (Descending)
-\`\`\`
-
-#### Para gastos por grupo:
-\`\`\`
-Colección: groups/{groupId}/expenses
-Campos: createdAt (Descending)
-\`\`\`
-
-#### Para transferencias por grupo:
-\`\`\`
-Colección: groups/{groupId}/transfers
-Campos: confirmedAt (Descending)
-\`\`\`
-
-### 3. Estructura de datos esperada
-
-#### Usuarios (`/users/{userId}`):
-\`\`\`javascript
-{
-  uid: string,
-  displayName: string | null,
-  email: string | null,
-  photoURL: string | null,
-  paymentInfo?: string,
-  createdAt: timestamp
-}
-\`\`\`
-
-#### Grupos (`/groups/{groupId}`):
-\`\`\`javascript
-{
-  name: string,
-  members: string[], // Array de UIDs
-  createdBy: string, // UID del creador
-  createdAt: timestamp
-}
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 \`\`\`
 
-#### Gastos (`/groups/{groupId}/expenses/{expenseId}`):
-\`\`\`javascript
-{
-  description: string,
-  amount: number,
-  paidBy: string, // UID
-  participants: string[], // Array de UIDs
-  createdAt: timestamp
-}
-\`\`\`
+## 6. Set up Firestore Security Rules
 
-#### Transferencias (`/groups/{groupId}/transfers/{transferId}`):
-\`\`\`javascript
-{
-  from: string, // UID
-  to: string, // UID
-  amount: number,
-  confirmedAt: timestamp,
-  confirmedBy: string // UID
-}
-\`\`\`
-
-#### Notificaciones (`/notifications/{notificationId}`):
-\`\`\`javascript
-{
-  userId: string, // UID del destinatario
-  type: 'new_expense' | 'added_to_group' | 'payment_marked',
-  message: string,
-  groupId: string,
-  createdAt: timestamp
-}
-\`\`\`
-
-#### Mensajes (`/groups/{groupId}/messages/{messageId}`):
-\`\`\`javascript
-{
-  userId: string, // UID del autor
-  message: string,
-  timestamp: timestamp
-}
-\`\`\`
-
-## Permisos por colección
-
-### ✅ Usuarios
-- **Leer**: Cualquier usuario autenticado
-- **Escribir**: Solo el propio usuario
-
-### ✅ Grupos
-- **Leer**: Solo miembros del grupo
-- **Crear**: El creador debe incluirse en miembros
-- **Actualizar**: Solo miembros (para agregar nuevos miembros)
-- **Eliminar**: Solo el creador
-
-### ✅ Gastos
-- **Leer**: Solo miembros del grupo
-- **Crear**: Solo miembros del grupo
-- **Actualizar/Eliminar**: Solo quien pagó el gasto
-
-### ✅ Transferencias
-- **Leer**: Solo miembros del grupo
-- **Crear**: Solo quien debe pagar
-- **Actualizar**: Quien paga o quien recibe
-- **Eliminar**: Solo quien creó la transferencia
-
-### ✅ Notificaciones
-- **Leer**: Solo el destinatario
-- **Crear**: Cualquier usuario autenticado
-- **Actualizar/Eliminar**: Solo el destinatario
-
-### ✅ Mensajes
-- **Leer**: Solo miembros del grupo
-- **Crear**: Solo miembros (y debe ser el autor)
-- **Actualizar/Eliminar**: Solo el autor del mensaje
-
-## Comandos útiles
-
-### Verificar reglas:
+Run the setup script:
 \`\`\`bash
-firebase firestore:rules:get
+node scripts/setup-firestore-rules.js
 \`\`\`
 
-### Desplegar reglas:
-\`\`\`bash
-firebase deploy --only firestore:rules
-\`\`\`
+## 7. Test the Setup
 
-### Verificar índices:
-\`\`\`bash
-firebase firestore:indexes
+1. Start your development server: `npm run dev`
+2. Try to sign in with Google
+3. Check if data is being saved to Firestore
+
+## Collections Structure
+
+- `users/` - User profiles and settings
+- `groups/` - Expense groups
+- `expenses/` - Individual expenses
+- `notifications/` - User notifications
+- `friends/` - Friend relationships
