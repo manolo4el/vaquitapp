@@ -3,8 +3,7 @@
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { LogIn, Loader2 } from "lucide-react"
+import { LogIn } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 
@@ -13,13 +12,19 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onNavigate }: LoginScreenProps) {
-  const { loginWithGoogle, loading } = useAuth()
+  const { login, loading } = useAuth()
 
-  const handleGoogleLogin = async () => {
+  const handleLogin = async () => {
     try {
-      await loginWithGoogle()
+      await login()
     } catch (error) {
       console.error("Error during login:", error)
+    }
+  }
+
+  const handlePrivacyClick = () => {
+    if (onNavigate) {
+      onNavigate("privacy-policy")
     }
   }
 
@@ -39,59 +44,58 @@ export function LoginScreen({ onNavigate }: LoginScreenProps) {
               />
             </div>
           </div>
-          <div className="space-y-2">
+          <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               Vaquitapp
             </h1>
-            <p className="text-muted-foreground">Organiza gastos entre amigos de forma simple y colaborativa</p>
+            <p className="text-muted-foreground mt-2">Organiza gastos entre amigos de forma simple</p>
           </div>
         </div>
 
         {/* Card de login */}
-        <Card className="border-0 shadow-2xl bg-card/95 backdrop-blur-sm">
-          <CardHeader className="text-center pb-4">
+        <Card className="shadow-xl border-primary/10">
+          <CardHeader className="text-center">
             <CardTitle className="text-xl">¡Bienvenido!</CardTitle>
-            <CardDescription>Inicia sesión para comenzar a organizar tus gastos grupales</CardDescription>
+            <CardDescription>Inicia sesión para comenzar a organizar tus gastos compartidos</CardDescription>
           </CardHeader>
-
-          <CardContent className="space-y-6">
-            {/* Botón de Google */}
+          <CardContent className="space-y-4">
             <Button
-              onClick={handleGoogleLogin}
+              onClick={handleLogin}
               disabled={loading}
-              className="w-full h-12 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+              className="w-full bg-primary hover:bg-primary/90 text-white h-12"
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <LogIn className="h-5 w-5 mr-2" />}
-              {loading ? "Iniciando sesión..." : "Continuar con Google"}
+              {loading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Iniciando sesión...</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <LogIn className="h-5 w-5" />
+                  <span>Continuar con Google</span>
+                </div>
+              )}
             </Button>
 
-            <Separator className="my-6" />
-
-            {/* Información adicional */}
-            <div className="text-center space-y-2">
-              <p className="text-xs text-muted-foreground">Al iniciar sesión, aceptas nuestros términos de servicio</p>
-              <div className="flex items-center justify-center space-x-4 text-xs">
-                <span className="text-muted-foreground">🔒 Seguro</span>
-                <span className="text-muted-foreground">🚀 Rápido</span>
-                <span className="text-muted-foreground">👥 Colaborativo</span>
-              </div>
+            <div className="text-center text-xs text-muted-foreground">
+              Al continuar, aceptas nuestros términos de servicio
             </div>
           </CardContent>
         </Card>
 
-        {/* Características principales */}
+        {/* Features */}
         <div className="grid grid-cols-1 gap-3 text-center">
           <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">
-            <span>💰</span>
-            <span>Divide gastos automáticamente</span>
+            <span>🔒</span>
+            <span>Seguro y privado</span>
           </div>
           <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">
             <span>📱</span>
-            <span>Notificaciones en tiempo real</span>
+            <span>Funciona sin conexión</span>
           </div>
           <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">
-            <span>🔄</span>
-            <span>Sincronización automática</span>
+            <span>💸</span>
+            <span>Divide gastos fácilmente</span>
           </div>
         </div>
 
@@ -99,9 +103,9 @@ export function LoginScreen({ onNavigate }: LoginScreenProps) {
         <div className="text-center pt-4">
           <Link
             href="/policy"
-            className="text-xs text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+            className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors underline"
           >
-            Política de privacidad
+            Política de Privacidad
           </Link>
         </div>
       </div>

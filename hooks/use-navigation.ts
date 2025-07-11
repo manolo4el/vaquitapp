@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 
-export type Page =
+export type NavigationPage =
   | "dashboard"
   | "add-expense"
   | "profile"
@@ -10,34 +10,38 @@ export type Page =
   | "group-join"
   | "debt-consolidation"
   | "expense-detail"
+  | "login"
+  | "privacy-policy"
 
 export function useNavigation() {
-  const [currentPage, setCurrentPage] = useState<Page>("dashboard")
+  const [currentPage, setCurrentPage] = useState<NavigationPage>("dashboard")
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null)
 
-  const navigateTo = (page: Page, groupId?: string, expenseId?: string) => {
-    console.log(
-      "Navigating to:",
-      page,
-      groupId ? `with group ${groupId}` : "",
-      expenseId ? `with expense ${expenseId}` : "",
-    )
+  const navigateTo = (page: NavigationPage, groupId?: string, expenseId?: string) => {
     setCurrentPage(page)
     if (groupId) {
       setSelectedGroupId(groupId)
-    } else if (page === "dashboard") {
-      setSelectedGroupId(null)
     }
     if (expenseId) {
       setSelectedExpenseId(expenseId)
-    } else if (page !== "expense-detail") {
-      setSelectedExpenseId(null)
     }
   }
 
-  const setGroupId = (groupId: string | null) => {
-    setSelectedGroupId(groupId)
+  const goBack = () => {
+    if (currentPage === "add-expense" || currentPage === "group-details") {
+      setCurrentPage("dashboard")
+    } else if (currentPage === "expense-detail") {
+      if (selectedGroupId) {
+        setCurrentPage("group-details")
+      } else {
+        setCurrentPage("dashboard")
+      }
+    } else if (currentPage === "privacy-policy") {
+      setCurrentPage("login")
+    } else {
+      setCurrentPage("dashboard")
+    }
   }
 
   return {
@@ -45,6 +49,6 @@ export function useNavigation() {
     selectedGroupId,
     selectedExpenseId,
     navigateTo,
-    setSelectedGroupId: setGroupId,
+    goBack,
   }
 }
