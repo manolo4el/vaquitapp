@@ -2,7 +2,6 @@
 
 import { useAuth } from "@/contexts/auth-context"
 import { LoginScreen } from "@/components/login-screen"
-import { PrivacyPolicyPage } from "@/components/privacy-policy-page"
 import { FirebaseSetupInstructions } from "@/components/firebase-setup-instructions"
 import { EnhancedDashboard } from "@/components/enhanced-dashboard"
 import { AddExpensePage } from "@/components/add-expense-page"
@@ -85,16 +84,6 @@ export default function Page() {
     navigateTo("group-details", groupId)
   }
 
-  // Si está en la página de política de privacidad, mostrarla sin autenticación
-  if (currentPage === "privacy-policy") {
-    return (
-      <>
-        <PrivacyPolicyPage onNavigate={navigateTo} />
-        <Toaster />
-      </>
-    )
-  }
-
   // Si está cargando por más de 15 segundos, mostrar opción de refresh
   if (loading && loadingTimeout) {
     return (
@@ -142,7 +131,7 @@ export default function Page() {
   if (!user) {
     return (
       <>
-        <LoginScreen onNavigate={navigateTo} />
+        <LoginScreen />
         <Toaster />
       </>
     )
