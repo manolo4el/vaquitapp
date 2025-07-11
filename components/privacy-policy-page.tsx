@@ -37,9 +37,14 @@ export function PrivacyPolicyPage({ onNavigate }: PrivacyPolicyPageProps) {
               </div>
             </div>
 
-            <Button variant="ghost" size="sm" onClick={handleBack} className="text-muted-foreground hover:text-primary">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              <span className="text-xs">Volver</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBack}
+              className="border-primary/20 hover:bg-primary/10 bg-transparent"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver
             </Button>
           </div>
         </div>
@@ -157,13 +162,6 @@ export function PrivacyPolicyPage({ onNavigate }: PrivacyPolicyPageProps) {
                   </p>
                 </div>
               </div>
-            </div>
-
-            <div className="mt-8 pt-6 border-t border-primary/10 text-center">
-              <Button onClick={handleBack} className="bg-primary hover:bg-primary/90 text-white">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Volver al inicio
-              </Button>
             </div>
           </CardContent>
         </Card>
